@@ -98,7 +98,7 @@ def run_tool(args, name, arguments, image_out=None):
 def cmd_start(args):
     options = app_options(args)
     pointer = pointer_file(args.name)
-    if pointer.exists() and not args.fresh:
+    if pointer.exists():  # one app per session name: stop the previous one, fresh or not
         from .session import AppSession
         root = Path(json.loads(pointer.read_text(encoding="utf-8"))["dir"])
         if (root / "app" / "session.json").exists():
