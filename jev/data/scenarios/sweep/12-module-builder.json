@@ -1,0 +1,472 @@
+{
+  "name": "12-module-builder",
+  "title": "Module builder: units, connections, modules, suggestions, exclusions, jurisdictions, templates, catalogue",
+  "features": [
+    "module-builder",
+    "builder-units",
+    "builder-connections",
+    "builder-modules",
+    "builder-suggest",
+    "builder-exclusions",
+    "builder-jurisdictions",
+    "builder-review",
+    "builder-templates",
+    "builder-catalogue-import",
+    "builder-catalogue-export",
+    "builder-save-scope"
+  ],
+  "app": {
+    "seed": "sample"
+  },
+  "steps": [
+    {
+      "do": "click",
+      "target": "New assessment"
+    },
+    {
+      "do": "type_text",
+      "target": "Assessor",
+      "text": "Alex Assessor",
+      "submit": "tab"
+    },
+    {
+      "do": "click",
+      "target": "Build assessment modules / fleet scope",
+      "expect": {
+        "dialog": "Build assessment scope"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Add connection",
+      "expect": {
+        "message": "at least two physical units"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK"
+    },
+    {
+      "do": "click",
+      "target": "Add unit",
+      "expect": {
+        "dialog": "Physical vehicle unit"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Physical vehicle unit",
+      "expect": {
+        "dialog": "Assessment scope"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Assessment scope"
+    },
+    {
+      "do": "click",
+      "target": "Add unit"
+    },
+    {
+      "do": "type_text",
+      "target": "Unit reference (e.g. trailer_1)",
+      "text": "prime_mover_1"
+    },
+    {
+      "do": "select_option",
+      "target": "Physical unit type",
+      "option": "prime_mover"
+    },
+    {
+      "do": "type_text",
+      "target": "Fleet ID",
+      "text": "PM-1"
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Physical vehicle unit",
+      "expect": {
+        "contains": "prime_mover_1"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Add unit"
+    },
+    {
+      "do": "type_text",
+      "target": "Unit reference (e.g. trailer_1)",
+      "text": "trailer_1"
+    },
+    {
+      "do": "select_option",
+      "target": "Physical unit type",
+      "option": "trailer"
+    },
+    {
+      "do": "type_text",
+      "target": "Registration",
+      "text": "TR01AB"
+    },
+    {
+      "do": "select_item",
+      "target": "Fitted bodies",
+      "item": 0,
+      "action": "check"
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Physical vehicle unit",
+      "expect": {
+        "contains": "trailer_1"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Add connection",
+      "expect": {
+        "dialog": "Connection"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Connection reference",
+      "text": "coupling_1"
+    },
+    {
+      "do": "select_option",
+      "target": "From unit",
+      "option": "prime_mover_1"
+    },
+    {
+      "do": "select_option",
+      "target": "To unit",
+      "option": "trailer_1"
+    },
+    {
+      "do": "select_option",
+      "target": "Coupling type",
+      "option": "fifth_wheel"
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Connection",
+      "expect": {
+        "contains": "coupling_1"
+      }
+    },
+    {
+      "do": "select_tab",
+      "tab": "Modules"
+    },
+    {
+      "do": "type_text",
+      "target": "Search module names, IDs or applicability",
+      "text": "rigid truck"
+    },
+    {
+      "do": "select_item",
+      "tab_hint": "Modules",
+      "item": "V01"
+    },
+    {
+      "do": "select_option",
+      "role": "combobox",
+      "tab_hint": "Modules",
+      "option": "prime_mover_1"
+    },
+    {
+      "do": "click",
+      "target": "Add selected module",
+      "expect": {
+        "contains": "V01@prime_mover_1"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Search module names, IDs or applicability",
+      "text": ""
+    },
+    {
+      "do": "click",
+      "target": "Suggest from fleet"
+    },
+    {
+      "do": "select_item",
+      "item": 0,
+      "role": "list",
+      "index": 1,
+      "tab_hint": "Modules"
+    },
+    {
+      "do": "click",
+      "target": "Set operating limits",
+      "optional": true
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "optional": true
+    },
+    {
+      "do": "click",
+      "target": "Exclude selected module",
+      "expect": {
+        "dialog": "Record scope exclusion"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Record scope exclusion",
+      "expect": {
+        "message": "reason and configuration evidence"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK"
+    },
+    {
+      "do": "click",
+      "target": "Exclude selected module"
+    },
+    {
+      "do": "type_text",
+      "target": "Why remove this check?",
+      "text": "Not fitted on this unit"
+    },
+    {
+      "do": "type_text",
+      "target": "Unit / configuration evidence",
+      "text": "Fleet register PM-1"
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Record scope exclusion",
+      "expect": {
+        "contains": "exclusions recorded"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Restore selected module",
+      "expect": {
+        "no_message": "Select an included module"
+      },
+      "soft": true,
+      "on_fail": {
+        "issue": "JEV-0008",
+        "title": "Module builder clears the module selection after excluding it, so Restore needs a reselect",
+        "severity": "low",
+        "category": "ux",
+        "key": "builder-restore-selection",
+        "expected": "The module just excluded stays selected, so Restore selected module works straight away.",
+        "actual_prefix": "AssessmentBuilder.refresh() rebuilds the list without restoring the selection: "
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Assessment scope",
+      "optional": true
+    },
+    {
+      "do": "select_item",
+      "item": 0,
+      "role": "list",
+      "index": 1,
+      "tab_hint": "Modules"
+    },
+    {
+      "do": "click",
+      "target": "Restore selected module",
+      "expect": {
+        "lacks": "exclusions recorded"
+      }
+    },
+    {
+      "do": "select_tab",
+      "tab": "Task and jurisdiction"
+    },
+    {
+      "do": "select_option",
+      "target": "Assessment purpose",
+      "option": "Refresher"
+    },
+    {
+      "do": "type_text",
+      "target": "Actual load state / cargo subprofile",
+      "text": "Empty trailer"
+    },
+    {
+      "do": "type_text",
+      "target": "Demonstrated route / site / conditions",
+      "text": "Depot yard and local roads"
+    },
+    {
+      "do": "type_text",
+      "target": "Task authority / current approvals",
+      "text": "Site induction 2026"
+    },
+    {
+      "do": "click",
+      "target": "Add jurisdiction check",
+      "expect": {
+        "dialog": "Jurisdiction verification"
+      }
+    },
+    {
+      "do": "select_option",
+      "target": "State / territory",
+      "option": "VIC"
+    },
+    {
+      "do": "type_text",
+      "target": "Current rule / authority references",
+      "text": "NHVR fatigue rules 2026"
+    },
+    {
+      "do": "type_text",
+      "target": "Effective date (YYYY-MM-DD)",
+      "text": "2026-07-01"
+    },
+    {
+      "do": "type_text",
+      "target": "Confirmed by",
+      "text": "Alex Assessor"
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Jurisdiction verification",
+      "expect": {
+        "contains": "VIC"
+      }
+    },
+    {
+      "do": "select_tab",
+      "tab": "Review and catalogue"
+    },
+    {
+      "do": "click",
+      "target": "Review gaps",
+      "expect": {
+        "contains": "Before operation"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Export catalogue",
+      "expect": {
+        "dialog": "file chooser"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Save",
+      "window": "file chooser"
+    },
+    {
+      "do": "click",
+      "target": "Import catalogue",
+      "expect": {
+        "dialog": "file chooser"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Path",
+      "text": "catalogue-malformed.json",
+      "submit": "enter",
+      "expect": {
+        "dialog": "Assessment scope"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Assessment scope"
+    },
+    {
+      "do": "click",
+      "target": "Import catalogue"
+    },
+    {
+      "do": "type_text",
+      "target": "Path",
+      "text": "catalogue-wrong-shape.json",
+      "submit": "enter",
+      "expect": {
+        "dialog": "Assessment scope"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Assessment scope"
+    },
+    {
+      "do": "click",
+      "target": "Save template",
+      "expect": {
+        "dialog": "Reusable employer template"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Template name:",
+      "text": "Semitrailer refresher",
+      "submit": "enter"
+    },
+    {
+      "do": "click",
+      "target": "Load template",
+      "expect": {
+        "dialog": "Load template"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Load template"
+    },
+    {
+      "do": "click",
+      "target": "Save",
+      "window": "Build assessment scope",
+      "expect": {
+        "dialog": "Scope decision"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Reason for this scope / linked reassessment:",
+      "text": "Refresher after equipment change",
+      "submit": "enter",
+      "expect": {
+        "modal": false
+      }
+    },
+    {
+      "do": "select_tab",
+      "tab": "2 Assess"
+    },
+    {
+      "do": "screenshot",
+      "note": "assess after module scope"
+    },
+    {
+      "do": "audit",
+      "kind": "all"
+    }
+  ]
+}

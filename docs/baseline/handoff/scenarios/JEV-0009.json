@@ -1,0 +1,69 @@
+{
+  "name": "unlock-raw-os-error",
+  "title": "Opening a folder that is not a vault explains what to do, without raw system errors",
+  "issue": {
+    "id": "JEV-0009",
+    "title": "The unlock dialog shows raw system errors ([Errno 2] No such file or directory, [Errno 36] File name too long)",
+    "severity": "medium",
+    "category": "copy",
+    "classification": "ux issue",
+    "expected": "A plain message such as 'No vault in this folder. Tick Create a new vault to make one here.', or 'This folder name is too long'.",
+    "actual": "'Could not open records' shows Python's OSError text with the full path, e.g. [Errno 2] No such file or directory: '<folder>/vault.lock'.",
+    "dt_test": "tests/desktop/test_ui.py: UnlockDialog with a folder that does not exist and Create unticked: patch QMessageBox.warning, call unlock(), and assert the message does not contain 'Errno' and tells the user to tick Create or choose the vault folder.",
+    "signatures": [
+      "text@dialog 'Could not open records'|matches errno d"
+    ],
+    "suspected": [
+      "dt/ui.py: UnlockDialog.unlock shows str(error) for every exception, including OSError from Vault()"
+    ]
+  },
+  "app": {
+    "seed": "none",
+    "network": "mock"
+  },
+  "steps": [
+    {
+      "do": "type_text",
+      "target": "Choose a device folder for encrypted driver training records.",
+      "text": "no-such-folder"
+    },
+    {
+      "do": "type_text",
+      "target": "Vault passphrase",
+      "text": "jev-synthetic-passphrase-2026",
+      "submit": "enter",
+      "soft": true,
+      "expect": {
+        "dialog": "Could not open records",
+        "no_message": [
+          "Errno",
+          "No such file or directory"
+        ]
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "optional": true
+    },
+    {
+      "do": "type_text",
+      "target": "Choose a device folder for encrypted driver training records.",
+      "text": "very-long-folder-name-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "paste": true
+    },
+    {
+      "do": "type_text",
+      "target": "Vault passphrase",
+      "text": "jev-synthetic-passphrase-2026",
+      "submit": "enter",
+      "expect": {
+        "dialog": "Could not open records",
+        "no_message": [
+          "Errno",
+          "File name too long"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "16-idle-lock",
+  "title": "Idle auto-lock (shortened to 6 s): pending edits survive, the screen is cleared, unlock restores them",
+  "features": ["idle-lock", "lock-pending-edits", "unlock"],
+  "app": {"seed": "sample", "idle_timeout_ms": 6000},
+  "steps": [
+    {"do": "select_item", "item": "Sam Synthetic"},
+    {"do": "type_text", "target": "Route, weather and traffic", "text": "Typed just before the idle lock", "settle": 0},
+    {"do": "wait", "seconds": 10},
+    {"do": "expect", "contains": ["LOCKED", "Unlock records"], "lacks": "Sam Synthetic"},
+    {"do": "click", "target": "Unlock records"},
+    {"do": "type_text", "target": "Vault passphrase", "text": "jev-synthetic-passphrase-2026"},
+    {"do": "click", "target": "Open", "role": "button"},
+    {"do": "select_item", "item": "Sam Synthetic"},
+    {"do": "expect", "value": {"target": "Route, weather and traffic", "equals": "Typed just before the idle lock"}}
+  ]
+}

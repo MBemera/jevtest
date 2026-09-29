@@ -1,0 +1,1 @@
+{"built": "2026-09-29T06:14:57", "dt_commit": "6ead5563ebbf", "runs": 30, "active_issues": 10, "by_status": {"open": 10}, "active_by_severity": {"high": 3, "medium": 6, "low": 1}, "code_percent": 76.4, "functions_run": 455, "ui_used": 238, "unlabelled": 10, "labels_never_seen": 7, "copy_problems": 0}

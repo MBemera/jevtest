@@ -1,0 +1,9 @@
+{
+  "_comment": "OpenRouter model IDs change often. `jev models --tools` lists what your key can use today; edit these lists freely. The first three were confirmed on OpenRouter on 2026-09-27 (DT handoff); the rest are well-known families to verify before use.",
+  "presets": {
+    "default": ["x-ai/grok-4.7"],
+    "trio": ["x-ai/grok-4.7", "moonshotai/kimi-k3", "z-ai/glm-5.3-flash"],
+    "frontier": ["anthropic/claude-sonnet-4.5", "openai/gpt-5", "google/gemini-2.5-pro"],
+    "budget": ["z-ai/glm-5.3-flash", "deepseek/deepseek-chat-v3.1", "qwen/qwen3-coder"]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "08-findings-review",
+  "title": "Findings review: coverage check on validated evidence, accept and reject suggestions",
+  "features": ["findings-coverage-check", "findings-accept", "findings-reject", "findings-requires-evidence"],
+  "app": {"seed": "sample"},
+  "steps": [
+    {"do": "select_item", "item": "Sam Synthetic"},
+    {"do": "select_tab", "tab": "5 Findings review"},
+    {"do": "click", "target": "Find missing marks / run selected helper", "expect": {"status": "Check video file"}},
+    {"do": "select_tab", "tab": "3 Evidence"},
+    {"do": "click", "target": "Import original evidence"},
+    {"do": "type_text", "target": "Path", "text": "drive-clip-12s-640x360.mp4", "submit": "enter"},
+    {"do": "wait", "seconds": 30, "until": "idle"},
+    {"do": "select_item", "item": "original", "tab_hint": "3 Evidence"},
+    {"do": "click", "target": "Check video file", "wait_busy": 60, "expect": {"status": "Media validated"}},
+    {"do": "select_tab", "tab": "5 Findings review"},
+    {"do": "select_option", "target": "Provider", "option": "Coverage check"},
+    {"do": "click", "target": "Find missing marks / run selected helper", "wait_busy": 60, "expect": {"status": "finding(s) recorded"}},
+    {"do": "select_item", "item": "pending", "tab_hint": "5 Findings review"},
+    {"do": "click", "target": "Accept finding", "expect": {"status": "Finding accepted"}},
+    {"do": "select_item", "item": "pending", "tab_hint": "5 Findings review"},
+    {"do": "click", "target": "Reject finding", "expect": {"status": "Finding rejected"}},
+    {"do": "click", "target": "Accept finding", "expect": {"message": "Select a finding first"}},
+    {"do": "click", "target": "OK"},
+    {"do": "screenshot", "note": "findings"}
+  ]
+}

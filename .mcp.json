@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jev": {
+      "type": "stdio",
+      "command": "${JEV_PYTHON:-python}",
+      "args": ["-m", "jev", "mcp"],
+      "env": {
+        "JEV_DT_PATH": "${JEV_DT_PATH:-../DT}"
+      }
+    }
+  }
+}

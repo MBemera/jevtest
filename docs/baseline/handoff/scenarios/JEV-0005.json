@@ -1,0 +1,64 @@
+{
+  "name": "evidence-selection-after-check",
+  "title": "The checked file stays selected after Check video file",
+  "issue": {
+    "id": "JEV-0005",
+    "title": "After Check video file finishes, the file selection is cleared, so the next evidence action fails",
+    "severity": "medium",
+    "category": "ux",
+    "expected": "After the media check the same file stays selected and Watch video and mark assessment opens it.",
+    "actual": "The evidence list is rebuilt with nothing selected and the next button warns 'Select an imported file first'.",
+    "dt_test": "tests/desktop/test_ui.py: import a fixture video, select it in window.assets, run 'Check video file' and wait for analysis_complete, then assert window.assets.currentRow() still points at the same file.",
+    "suspected": [
+      "dt/ui.py: MainWindow.analysis_complete -> refresh_sessions -> populate_session clears self.assets"
+    ]
+  },
+  "app": {
+    "seed": "sample"
+  },
+  "steps": [
+    {
+      "do": "select_item",
+      "item": "Riley Ready"
+    },
+    {
+      "do": "select_tab",
+      "tab": "3 Evidence"
+    },
+    {
+      "do": "click",
+      "target": "Import original evidence"
+    },
+    {
+      "do": "type_text",
+      "target": "Path",
+      "text": "drive-clip-12s-640x360.mp4",
+      "submit": "enter"
+    },
+    {
+      "do": "wait",
+      "seconds": 30,
+      "until": "idle"
+    },
+    {
+      "do": "select_item",
+      "item": "original",
+      "tab_hint": "3 Evidence"
+    },
+    {
+      "do": "click",
+      "target": "Check video file",
+      "wait_busy": 60,
+      "expect": {
+        "status": "Media validated"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Watch video and mark assessment",
+      "expect": {
+        "no_message": "Select an imported file first"
+      }
+    }
+  ]
+}

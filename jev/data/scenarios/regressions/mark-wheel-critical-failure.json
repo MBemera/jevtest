@@ -1,0 +1,21 @@
+{
+  "name": "mark-wheel-critical-failure",
+  "title": "Scrolling the mouse wheel over the Mark dropdown does not stop the session",
+  "issue": {"id": "JEV-0001", "title": "Mouse wheel over the Mark dropdown can set CF and permanently stop the session with no confirmation",
+            "severity": "high", "category": "data-loss",
+            "expected": "Wheel scrolling over the Mark dropdown does not change the mark (or CF asks for confirmation), and returning the mark leaves the outcome unchanged.",
+            "actual": "Four wheel notches move C -> D -> NYC -> NA -> CF with autosave; the record becomes STOPPED / Not yet competent and stays so after the mark is changed back.",
+            "dt_test": "tests/desktop/test_ui.py: open a check on 2 Assess, send QWheelEvents to window.mark_choice without giving it focus, and assert the mark and outcome are unchanged. Also assert that choosing CF asks for confirmation before the session stops.",
+            "suspected": ["dt/ui.py: MainWindow.mark_box QComboBox accepts wheel events without focus",
+                          "dt/drafts.py: DraftBuffer.mark keeps state 'stopped' once any CF was recorded"]},
+  "app": {"seed": "sample"},
+  "steps": [
+    {"do": "select_item", "item": "Riley Ready"},
+    {"do": "select_tab", "tab": "2 Assess"},
+    {"do": "select_item", "target": "Observable checks", "item": "E02.02"},
+    {"do": "scroll", "target": "Mark", "role": "combobox", "direction": "down", "amount": 4},
+    {"do": "scroll", "target": "Mark", "role": "combobox", "direction": "up", "amount": 4},
+    {"do": "wait", "seconds": 1},
+    {"do": "select_tab", "tab": "4 Finalise", "expect": {"lacks": ["STOPPED", "CRITICAL EVENT"]}}
+  ]
+}

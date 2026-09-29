@@ -1,0 +1,231 @@
+{
+  "name": "10-finalise-sign-export",
+  "title": "Finalise: checklist navigation, review notes, reload, signature pad, sign, export and correction addendum",
+  "features": [
+    "signing-checklist",
+    "next-unfinished-step",
+    "review-notes",
+    "reload-saved",
+    "signature-pad",
+    "sign",
+    "signed-read-only",
+    "export-pdf",
+    "addendum"
+  ],
+  "app": {
+    "seed": "sample"
+  },
+  "steps": [
+    {
+      "do": "select_item",
+      "item": "New driver"
+    },
+    {
+      "do": "select_tab",
+      "tab": "4 Finalise"
+    },
+    {
+      "do": "click",
+      "target": "Sign assessment",
+      "expect": {
+        "status": "Complete the listed steps"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Go to next unfinished step",
+      "expect": {
+        "contains": "*1 Prepare*"
+      }
+    },
+    {
+      "do": "select_item",
+      "item": "Riley Ready"
+    },
+    {
+      "do": "select_tab",
+      "tab": "4 Finalise"
+    },
+    {
+      "do": "type_text",
+      "target": "Development actions, owner, due date and reassessment evidence",
+      "text": "Practise reversing; Alex; 2026-10-30."
+    },
+    {
+      "do": "type_text",
+      "target": "Driver comments and acknowledgement",
+      "text": "Understood."
+    },
+    {
+      "do": "click",
+      "target": "Save review notes",
+      "expect": {
+        "status": "Saved locally"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Driver comments and acknowledgement",
+      "text": "Changed my mind",
+      "settle": 0
+    },
+    {
+      "do": "click",
+      "target": "Reload saved record",
+      "optional": true,
+      "expect": {
+        "dialog": "Discard unsaved edits"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Yes",
+      "optional": true
+    },
+    {
+      "do": "click",
+      "target": "Sign assessment",
+      "expect": {
+        "dialog": "Sign assessment"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Save",
+      "window": "Sign assessment",
+      "expect": {
+        "contains": "Draw a signature"
+      }
+    },
+    {
+      "do": "draw",
+      "target": "Signature drawing area"
+    },
+    {
+      "do": "click",
+      "target": "Clear"
+    },
+    {
+      "do": "draw",
+      "target": "Signature drawing area",
+      "strokes": [
+        [
+          [
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ]
+      ]
+    },
+    {
+      "do": "click",
+      "target": "Save",
+      "window": "Sign assessment",
+      "expect": {
+        "contains": "Draw a signature"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Clear"
+    },
+    {
+      "do": "draw",
+      "target": "Signature drawing area"
+    },
+    {
+      "do": "click",
+      "target": "Save",
+      "window": "Sign assessment",
+      "expect": {
+        "modal": false,
+        "contains": "Riley Ready | signed"
+      }
+    },
+    {
+      "do": "select_tab",
+      "tab": "1 Prepare"
+    },
+    {
+      "do": "type_text",
+      "target": "Organisation",
+      "text": "tamper",
+      "expect": {
+        "error": "read-only"
+      }
+    },
+    {
+      "do": "select_tab",
+      "tab": "4 Finalise"
+    },
+    {
+      "do": "click",
+      "target": "Export PDF and manifest",
+      "expect": {
+        "dialog": "Authorised recipient"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Cancel",
+      "expect": {
+        "modal": false
+      }
+    },
+    {
+      "do": "click",
+      "target": "Export PDF and manifest"
+    },
+    {
+      "do": "type_text",
+      "target": "Who is this management export for?",
+      "text": "Fleet manager",
+      "submit": "enter"
+    },
+    {
+      "do": "type_text",
+      "target": "Purpose of this export",
+      "text": "Quarterly review",
+      "submit": "enter",
+      "expect": {
+        "dialog": "file chooser"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Choose folder",
+      "expect": {
+        "dialog": "Export verified"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK"
+    },
+    {
+      "do": "click",
+      "target": "Create correction addendum",
+      "expect": {
+        "dialog": "Correction addendum"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Reason for correction",
+      "text": "Driver ID typo",
+      "submit": "enter"
+    },
+    {
+      "do": "expect",
+      "contains": "4 items"
+    },
+    {
+      "do": "screenshot",
+      "note": "after addendum"
+    }
+  ]
+}

@@ -1,0 +1,748 @@
+[
+  {
+    "id": "JEV-0001",
+    "title": "Mouse wheel over the Mark dropdown can set CF and permanently stop the session with no confirmation",
+    "status": "open",
+    "severity": "high",
+    "category": "data-loss",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 180.0,
+    "rank": 1,
+    "expected": "Wheel scrolling over the Mark dropdown does not change the mark (or CF asks for confirmation), and returning the mark leaves the outcome unchanged.",
+    "actual": "Four wheel notches move C -> D -> NYC -> NA -> CF with autosave; the record becomes STOPPED / Not yet competent and stays so after the mark is changed back.",
+    "steps": [
+      "Start DT with seed=sample (Jev seed/network options).",
+      "Select the row \"Riley Ready\"",
+      "Open the \"2 Assess\" tab",
+      "Select the row \"E02.02\" in \"Observable checks\"",
+      "Turn the mouse wheel down 4 notch(es) over \"Mark\"",
+      "Turn the mouse wheel up 4 notch(es) over \"Mark\"",
+      "Wait up to 1 s",
+      "Open the \"4 Finalise\" tab"
+    ],
+    "code": [
+      {
+        "file": "dt/ui.py",
+        "line": 748,
+        "function": "MainWindow.mark_box",
+        "why": "named in the issue: dt/ui.py: MainWindow.mark_box QComboBox accepts wheel events without focus"
+      },
+      {
+        "file": "dt/drafts.py",
+        "line": 47,
+        "function": "DraftBuffer.mark",
+        "why": "named in the issue: dt/drafts.py: DraftBuffer.mark keeps state 'stopped' once any CF was recorded"
+      }
+    ],
+    "suspected": [
+      "dt/ui.py: MainWindow.mark_box QComboBox accepts wheel events without focus",
+      "dt/drafts.py: DraftBuffer.mark keeps state 'stopped' once any CF was recorded"
+    ],
+    "occurrences": 1,
+    "runs": 1,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:09:30",
+    "last_seen": "2026-09-29T06:09:30",
+    "scenario": "regressions/mark-wheel-critical-failure",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_ui.py: open a check on 2 Assess, send QWheelEvents to window.mark_choice without giving it focus, and assert the mark and outcome are unchanged. Also assert that choosing CF asks for confirmation before the session stops.",
+    "brief": "issues/JEV-0001.md",
+    "replay": "scenarios/JEV-0001.json",
+    "screenshots": [
+      "evidence/JEV-0001-1.png"
+    ]
+  },
+  {
+    "id": "JEV-0002",
+    "title": "Typing a truck make key by key saves a corrupted value (KENWORTH becomes KENWORTHWORTH)",
+    "status": "open",
+    "severity": "high",
+    "category": "functional",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 132.0,
+    "rank": 2,
+    "expected": "After typing KENWORTH and pressing Tab, Truck make is KENWORTH and no 'not in the register' note appears.",
+    "actual": "The field holds KENWORTHWORTH ('Ken' gives 'KenT KENWORTH'), and DT records that value.",
+    "steps": [
+      "Start DT with seed=empty (Jev seed/network options).",
+      "Click \"New assessment\"",
+      "Type \"KENWORTH\" into \"Truck make\" and press Tab"
+    ],
+    "code": [
+      {
+        "file": "dt/ui.py",
+        "line": 640,
+        "function": "MainWindow.searchable_combo",
+        "why": "named in the issue: dt/ui.py: MainWindow.searchable_combo sets Qt.MatchContains on the editable combo's defaul"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 653,
+        "function": "MainWindow.vehicle_rows",
+        "why": "string text 'Truck make'"
+      },
+      {
+        "file": "dt/reports.py",
+        "line": 66,
+        "function": "",
+        "why": "string text 'Truck make'"
+      }
+    ],
+    "suspected": [
+      "dt/ui.py: MainWindow.searchable_combo sets Qt.MatchContains on the editable combo's default InlineCompletion completer"
+    ],
+    "occurrences": 1,
+    "runs": 1,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:09:34",
+    "last_seen": "2026-09-29T06:09:34",
+    "scenario": "regressions/truck-make-inline-completion",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_vehicle_ui.py: combo = window.vehicle_choices['truck_make']; focus it, QTest.keyClicks(combo.lineEdit(), 'KENWORTH'), press Tab, then assert combo.currentText() == 'KENWORTH' and that the saved preparation holds 'KENWORTH'.",
+    "brief": "issues/JEV-0002.md",
+    "replay": "scenarios/JEV-0002.json",
+    "screenshots": [
+      "evidence/JEV-0002-1.png"
+    ]
+  },
+  {
+    "id": "JEV-0003",
+    "title": "Cancel report request does nothing while an AI draft is being requested",
+    "status": "open",
+    "severity": "high",
+    "category": "functional",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 132.0,
+    "rank": 3,
+    "expected": "Cancel report request stops waiting at once and the status bar says the request was cancelled (README promise).",
+    "actual": "The click is ignored until the provider answers.",
+    "steps": [
+      "Start DT with seed=sample, network=mock (Jev seed/network options).",
+      "Select the row \"Sam Synthetic\"",
+      "Open the \"4 Finalise\" tab",
+      "Click \"Report AI setup (optional)\"",
+      "Choose \"OpenRouter\" in \"Provider\"",
+      "Type \"bad model id with spaces\" into \"Model\"",
+      "Type \"sk-or-v1-synthetic\" into \"API key / Copilot access token\"",
+      "Click \"Save\"",
+      "Click \"Draft report with AI\"",
+      "Click \"OK\"",
+      "Click \"Report AI setup (optional)\"",
+      "Type \"x-ai/grok-4.7\" into \"Model\"",
+      "Click \"Save\"",
+      "Click \"Draft report with AI\"",
+      "Check the screen",
+      "Tick \"Include my recorded observations\"",
+      "Untick \"Include my recorded observations\"",
+      "Click \"Send approved text\"",
+      "Click \"Use reviewed draft\"",
+      "Check the screen",
+      "(harness) make the mocked ai service answer 'http_429'",
+      "Click \"Draft report with AI\"",
+      "Click \"Send approved text\"",
+      "(harness) make the mocked ai service answer 'unfinished'",
+      "Click \"Draft report with AI\"",
+      "Click \"Send approved text\"",
+      "(harness) make the mocked ai service answer 'long_draft'",
+      "Click \"Draft report with AI\"",
+      "Click \"Send approved text\"",
+      "(harness) make the mocked ai service answer 'injection'",
+      "Click \"Draft report with AI\"",
+      "Click \"Send approved text\"",
+      "Click \"Cancel\" in the \"Review AI report draft\" window",
+      "(harness) make the mocked ai service answer 'slow'",
+      "Click \"Draft report with AI\"",
+      "Click \"Send approved text\"",
+      "Click \"Cancel report request\""
+    ],
+    "code": [
+      {
+        "file": "dt/ui.py",
+        "line": 960,
+        "function": "MainWindow.finalise_tab",
+        "why": "named in the issue: dt/ui.py: finalise_tab wires 'Cancel report request' through MainWindow.button -> run_acti"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 567,
+        "function": "MainWindow.button",
+        "why": "named in the issue: dt/ui.py: finalise_tab wires 'Cancel report request' through MainWindow.button -> run_acti"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 1429,
+        "function": "MainWindow.draft_report",
+        "why": "status text 'Requesting an AI draft. Review it before applying; Cancel re'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 978,
+        "function": "MainWindow.finalise_tab",
+        "why": "button text 'Requesting an AI draft. Review it before applying; Cancel re'"
+      }
+    ],
+    "suspected": [
+      "dt/ui.py: finalise_tab wires 'Cancel report request' through MainWindow.button -> run_action, which returns while busy()"
+    ],
+    "occurrences": 2,
+    "runs": 2,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:06:05",
+    "last_seen": "2026-09-29T06:09:02",
+    "scenario": "regressions/cancel-report-request",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_ui.py: patch the report provider so the request blocks on a threading.Event, call draft_report, click the 'Cancel report request' button while busy() is true, and assert the status bar says the request was cancelled and a late reply is discarded.",
+    "brief": "issues/JEV-0003.md",
+    "replay": "scenarios/JEV-0003.json",
+    "screenshots": [
+      "evidence/JEV-0003-1.png",
+      "evidence/JEV-0003-2.png"
+    ]
+  },
+  {
+    "id": "JEV-0009",
+    "title": "The unlock dialog shows raw system errors ([Errno 2] No such file or directory, [Errno 36] File name too long)",
+    "status": "open",
+    "severity": "medium",
+    "category": "copy",
+    "classification": "ux issue",
+    "confidence": "confirmed",
+    "score": 75.0,
+    "rank": 4,
+    "expected": "A plain message such as 'No vault in this folder. Tick Create a new vault to make one here.', or 'This folder name is too long'.",
+    "actual": "'Could not open records' shows Python's OSError text with the full path, e.g. [Errno 2] No such file or directory: '<folder>/vault.lock'.",
+    "steps": [
+      "Start DT with seed=none, network=mock (Jev seed/network options).",
+      "Type \"no-such-folder\" into \"Choose a device folder for encrypted driver training records.\"",
+      "Type \"jev-synthetic-passphrase-2026\" into \"Vault passphrase\" and press Enter",
+      "Click \"OK\"",
+      "Type \"very-long-folder-name-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" into \"Choose a device folder for encrypted driver training records.\"",
+      "Type \"jev-synthetic-passphrase-2026\" into \"Vault passphrase\" and press Enter"
+    ],
+    "code": [
+      {
+        "file": "dt/ui.py",
+        "line": 198,
+        "function": "UnlockDialog.unlock",
+        "why": "named in the issue: dt/ui.py: UnlockDialog.unlock shows str(error) for every exception, including OSError from"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 206,
+        "function": "UnlockDialog.unlock",
+        "why": "title text 'Could not open records'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 181,
+        "function": "UnlockDialog.__init__",
+        "why": "placeholder text 'Vault passphrase'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 183,
+        "function": "UnlockDialog.__init__",
+        "why": "checkbox the control 'Create a new vault in an empty folder'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 170,
+        "function": "UnlockDialog.__init__",
+        "why": "label the control 'Choose a device folder for encrypted driver training records.'"
+      }
+    ],
+    "suspected": [
+      "dt/ui.py: UnlockDialog.unlock shows str(error) for every exception, including OSError from Vault()"
+    ],
+    "occurrences": 7,
+    "runs": 2,
+    "reporters": [
+      "crawler",
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:09:37",
+    "last_seen": "2026-09-29T06:11:32",
+    "scenario": "regressions/unlock-raw-os-error",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_ui.py: UnlockDialog with a folder that does not exist and Create unticked: patch QMessageBox.warning, call unlock(), and assert the message does not contain 'Errno' and tells the user to tick Create or choose the vault folder.",
+    "brief": "issues/JEV-0009.md",
+    "replay": "scenarios/JEV-0009.json",
+    "screenshots": [
+      "evidence/JEV-0009-1.png",
+      "evidence/JEV-0009-2.png",
+      "evidence/JEV-0009-3.png"
+    ]
+  },
+  {
+    "id": "JEV-0004",
+    "title": "Cancel registration check does nothing while the NHVR request is running",
+    "status": "open",
+    "severity": "medium",
+    "category": "functional",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 66.0,
+    "rank": 5,
+    "expected": "Cancel registration check stops waiting at once and says so.",
+    "actual": "The click is ignored until NHVR answers.",
+    "steps": [
+      "Start DT with seed=sample, network=mock (Jev seed/network options).",
+      "Select the row \"Sam Synthetic\"",
+      "Click \"Registration check setup (optional)\"",
+      "Type \"jev-synthetic-key-123\" into \"NHVR subscription key\"",
+      "Click \"Save\"",
+      "(harness) make the mocked nhvr service answer 'slow'",
+      "Click \"Check registration with NHVR\"",
+      "Click \"Send this plate\"",
+      "Click \"Cancel registration check\""
+    ],
+    "code": [
+      {
+        "file": "dt/ui.py",
+        "line": 672,
+        "function": "MainWindow.registration_rows",
+        "why": "named in the issue: dt/ui.py: registration_rows connects every button, including Cancel registration check, th"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 1845,
+        "function": "MainWindow.busy",
+        "why": "named in the issue: dt/ui.py: registration_rows connects every button, including Cancel registration check, th"
+      },
+      {
+        "file": "dt/registration.py",
+        "line": 77,
+        "function": "get_json",
+        "why": "named in the issue: dt/registration.py: get_json blocks in opener.open for up to 15 s, so even a wired button "
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 680,
+        "function": "MainWindow.registration_rows",
+        "why": "string text 'Cancel registration check'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 1476,
+        "function": "MainWindow.check_registration",
+        "why": "status text 'Checking this plate with NHVR. Cancel check stops waiting.'"
+      }
+    ],
+    "suspected": [
+      "dt/ui.py: registration_rows connects every button, including Cancel registration check, through run_action, which returns while busy()",
+      "dt/registration.py: get_json blocks in opener.open for up to 15 s, so even a wired button would wait"
+    ],
+    "occurrences": 1,
+    "runs": 1,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:08:41",
+    "last_seen": "2026-09-29T06:08:41",
+    "scenario": "regressions/cancel-registration-check",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_vehicle_ui.py: patch registration.get_json (or the opener) to block, start an NHVR check, click 'Cancel registration check' and assert the status says cancelled within a second and no result is recorded.",
+    "brief": "issues/JEV-0004.md",
+    "replay": "scenarios/JEV-0004.json",
+    "screenshots": [
+      "evidence/JEV-0004-1.png"
+    ]
+  },
+  {
+    "id": "JEV-0005",
+    "title": "After Check video file finishes, the file selection is cleared, so the next evidence action fails",
+    "status": "open",
+    "severity": "medium",
+    "category": "ux",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 60.0,
+    "rank": 6,
+    "expected": "After the media check the same file stays selected and Watch video and mark assessment opens it.",
+    "actual": "The evidence list is rebuilt with nothing selected and the next button warns 'Select an imported file first'.",
+    "steps": [
+      "Start DT with seed=sample (Jev seed/network options).",
+      "Select the row \"Riley Ready\"",
+      "Open the \"3 Evidence\" tab",
+      "Click \"Import original evidence\"",
+      "Type \"drive-clip-12s-640x360.mp4\" into \"Path\" and press Enter",
+      "Wait up to 30 s for the job to finish",
+      "Select the row \"original\"",
+      "Click \"Check video file\"",
+      "Click \"Watch video and mark assessment\""
+    ],
+    "code": [
+      {
+        "file": "dt/ui.py",
+        "line": 1759,
+        "function": "MainWindow.analysis_complete",
+        "why": "named in the issue: dt/ui.py: MainWindow.analysis_complete -> refresh_sessions -> populate_session clears self"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 1222,
+        "function": "MainWindow.populate_session",
+        "why": "named in the issue: dt/ui.py: MainWindow.analysis_complete -> refresh_sessions -> populate_session clears self"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 1599,
+        "function": "MainWindow.selected_asset",
+        "why": "error text 'Select an imported file first'"
+      },
+      {
+        "file": "dt/application.py",
+        "line": 206,
+        "function": "AssessmentService.record_evidence_review",
+        "why": "error text 'Select an imported file first'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 901,
+        "function": "MainWindow.evidence_tab",
+        "why": "button text 'Watch video and mark assessment'"
+      }
+    ],
+    "suspected": [
+      "dt/ui.py: MainWindow.analysis_complete -> refresh_sessions -> populate_session clears self.assets"
+    ],
+    "occurrences": 1,
+    "runs": 1,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:09:19",
+    "last_seen": "2026-09-29T06:09:19",
+    "scenario": "regressions/evidence-selection-after-check",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_ui.py: import a fixture video, select it in window.assets, run 'Check video file' and wait for analysis_complete, then assert window.assets.currentRow() still points at the same file.",
+    "brief": "issues/JEV-0005.md",
+    "replay": "scenarios/JEV-0005.json",
+    "screenshots": [
+      "evidence/JEV-0005-1.png"
+    ]
+  },
+  {
+    "id": "JEV-0006",
+    "title": "Backing up into the vault folder fails with a generic message that hides the reason",
+    "status": "open",
+    "severity": "medium",
+    "category": "ux",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 60.0,
+    "rank": 7,
+    "expected": "The status says 'Choose a backup location outside the active vault'.",
+    "actual": "The status says 'Operation failed. Check destination space, file access and evidence integrity.'",
+    "steps": [
+      "Start DT with seed=sample (Jev seed/network options).",
+      "Select the row \"Riley Ready\"",
+      "Click \"Check recovery\"",
+      "Click \"OK\"",
+      "Click \"Back up vault\"",
+      "Click \"Choose folder\"",
+      "Wait up to 60 s",
+      "Check the screen",
+      "Click \"OK\"",
+      "Click \"Back up vault\"",
+      "Type \"../vaults/seeded-vault\" into \"Path\" and press Enter"
+    ],
+    "code": [
+      {
+        "file": "dt/ui.py",
+        "line": 143,
+        "function": "MaintenanceWorker.run",
+        "why": "named in the issue: dt/ui.py: MaintenanceWorker.run replaces every exception with one generic message"
+      },
+      {
+        "file": "dt/storage.py",
+        "line": 569,
+        "function": "Vault.backup",
+        "why": "error text 'Choose a backup location outside the active vault'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 157,
+        "function": "MaintenanceWorker.run",
+        "why": "string text 'Operation failed. Check destination space, file access and e'"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 1876,
+        "function": "MainWindow.start_maintenance",
+        "why": "status text 'Verifying encrypted records and evidence...'"
+      }
+    ],
+    "suspected": [
+      "dt/ui.py: MaintenanceWorker.run replaces every exception with one generic message"
+    ],
+    "occurrences": 2,
+    "runs": 2,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:07:20",
+    "last_seen": "2026-09-29T06:08:12",
+    "scenario": "regressions/backup-error-reason",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_ui.py: run MaintenanceWorker (or start_maintenance) with a backup folder inside the vault and assert the message shown contains 'outside the active vault'.",
+    "brief": "issues/JEV-0006.md",
+    "replay": "scenarios/JEV-0006.json",
+    "screenshots": [
+      "evidence/JEV-0006-1.png",
+      "evidence/JEV-0006-2.png"
+    ]
+  },
+  {
+    "id": "JEV-0007",
+    "title": "Help guide says video playback is not built in, but Evidence has in-app playback and clipping",
+    "status": "open",
+    "severity": "medium",
+    "category": "copy",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 60.0,
+    "rank": 8,
+    "expected": "The 'Evidence and review copies' topic describes Watch video and mark assessment, clipping and Install FFmpeg for video features.",
+    "actual": "It says 'Watch the recording in your video player ... Playback is not built into this version.' and to ask support to configure FFmpeg.",
+    "steps": [
+      "Start DT with seed=empty (Jev seed/network options).",
+      "Press F1",
+      "Choose \"Evidence and review copies\" in \"Help topic\"",
+      "Check the screen"
+    ],
+    "code": [
+      {
+        "file": "dt/help_guide.py",
+        "line": 51,
+        "function": "",
+        "why": "string text 'Evidence and review copies'"
+      },
+      {
+        "file": "dt/help_guide.py",
+        "line": 93,
+        "function": "",
+        "why": "string text 'Evidence and review copies'"
+      },
+      {
+        "file": "dt/help_guide.py",
+        "line": 52,
+        "function": "",
+        "why": "string text 'Playback is not built into this version'"
+      },
+      {
+        "file": "dt/help_guide.py",
+        "line": 103,
+        "function": "HelpGuide.__init__",
+        "why": "label the control 'Help topic'"
+      }
+    ],
+    "suspected": [
+      "dt/help_guide.py: TOPICS['Evidence and review copies']"
+    ],
+    "occurrences": 1,
+    "runs": 1,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:09:23",
+    "last_seen": "2026-09-29T06:09:23",
+    "scenario": "regressions/help-playback-text",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_ui.py: assert TOPICS['Evidence and review copies'] does not say playback is missing, and that it names 'Watch video and mark assessment'.",
+    "brief": "issues/JEV-0007.md",
+    "replay": "scenarios/JEV-0007.json",
+    "screenshots": [
+      "evidence/JEV-0007-1.png"
+    ]
+  },
+  {
+    "id": "JEV-0010",
+    "title": "Checking a damaged video shows raw FFprobe output (moov atom not found, memory addresses, internal paths)",
+    "status": "open",
+    "severity": "medium",
+    "category": "copy",
+    "classification": "ux issue",
+    "confidence": "confirmed",
+    "score": 60.0,
+    "rank": 9,
+    "expected": "A plain message such as 'This file is not a playable video; it may be incomplete or damaged. Import the original recording again.', with the tool output kept for diagnostics.",
+    "actual": "The status bar shows 'FFprobe could not read this file: [mov,mp4,... @ 0x55e5...] moov atom not found <vault>/work/<id>.mp4: Invalid data found when processing input'.",
+    "steps": [
+      "Start DT with seed=sample, network=mock (Jev seed/network options).",
+      "Select the row \"Riley Ready\"",
+      "Open the \"3 Evidence\" tab",
+      "Click \"Import original evidence\"",
+      "Type \"random-bytes.mp4\" into \"Path\" and press Enter",
+      "Wait up to 20 s for the job to finish",
+      "Select the row \"204,800 bytes\"",
+      "Click \"Check video file\""
+    ],
+    "code": [
+      {
+        "file": "dt/media.py",
+        "line": 237,
+        "function": "probe_media",
+        "why": "named in the issue: dt/media.py: probe_media raises MediaToolError('FFprobe could not read this file: ' + erro"
+      },
+      {
+        "file": "dt/media.py",
+        "line": 166,
+        "function": "error_tail",
+        "why": "named in the issue: dt/media.py: probe_media raises MediaToolError('FFprobe could not read this file: ' + erro"
+      },
+      {
+        "file": "dt/media.py",
+        "line": 243,
+        "function": "probe_media",
+        "why": "string text 'FFprobe could not read this file: [mov,mp4,... @ 0x55e5...] '"
+      },
+      {
+        "file": "dt/ui.py",
+        "line": 902,
+        "function": "MainWindow.evidence_tab",
+        "why": "button text 'Check video file'"
+      }
+    ],
+    "suspected": [
+      "dt/media.py: probe_media raises MediaToolError('FFprobe could not read this file: ' + error_tail(stderr)), and the UI shows that text as is"
+    ],
+    "occurrences": 3,
+    "runs": 2,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:05:11",
+    "last_seen": "2026-09-29T06:08:19",
+    "scenario": "regressions/broken-video-raw-ffprobe",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/test_media.py: make ffprobe fail on a random-bytes file and assert the MediaToolError text shown to users has no '@ 0x', no work-folder path and no 'moov atom'.",
+    "brief": "issues/JEV-0010.md",
+    "replay": "scenarios/JEV-0010.json",
+    "screenshots": [
+      "evidence/JEV-0010-1.png",
+      "evidence/JEV-0010-2.png",
+      "evidence/JEV-0010-3.png"
+    ]
+  },
+  {
+    "id": "JEV-0008",
+    "title": "Module builder clears the module selection after excluding it, so Restore needs a reselect",
+    "status": "open",
+    "severity": "low",
+    "category": "ux",
+    "classification": "confirmed bug",
+    "confidence": "confirmed",
+    "score": 20.0,
+    "rank": 10,
+    "expected": "The excluded module stays selected, so Restore selected module works at once.",
+    "actual": "The selection is cleared; Restore warns 'Select an included module in the Modules tab'.",
+    "steps": [
+      "Start DT with seed=sample (Jev seed/network options).",
+      "Click \"New assessment\"",
+      "Type \"Alex Assessor\" into \"Assessor\" and press Tab",
+      "Click \"Build assessment modules / fleet scope\"",
+      "Click \"Add unit\"",
+      "Type \"rigid_1\" into \"Unit reference (e.g. trailer_1)\"",
+      "Choose \"rigid\" in \"Physical unit type\"",
+      "Type \"R-1\" into \"Fleet ID\"",
+      "Click \"OK\" in the \"Physical vehicle unit\" window",
+      "Open the \"Modules\" tab",
+      "Click \"Suggest from fleet\"",
+      "Select the row \"0\"",
+      "Click \"Exclude selected module\"",
+      "Type \"Not fitted\" into \"Why remove this check?\"",
+      "Type \"Fleet register\" into \"Unit / configuration evidence\"",
+      "Click \"OK\" in the \"Record scope exclusion\" window",
+      "Click \"Restore selected module\""
+    ],
+    "code": [
+      {
+        "file": "dt/assessment_ui.py",
+        "line": 235,
+        "function": "AssessmentBuilder.refresh",
+        "why": "named in the issue: dt/assessment_ui.py: AssessmentBuilder.refresh rebuilds lists without restoring the curren"
+      },
+      {
+        "file": "dt/assessment_ui.py",
+        "line": 374,
+        "function": "AssessmentBuilder.selected_scope",
+        "why": "error text 'Select an included module in the Modules tab'"
+      },
+      {
+        "file": "dt/assessment_ui.py",
+        "line": 184,
+        "function": "AssessmentBuilder.build_modules_tab",
+        "why": "button text 'Restore selected module'"
+      }
+    ],
+    "suspected": [
+      "dt/assessment_ui.py: AssessmentBuilder.refresh rebuilds lists without restoring the current row"
+    ],
+    "occurrences": 2,
+    "runs": 2,
+    "reporters": [
+      "scenario"
+    ],
+    "dt_commits": [
+      "6ead5563ebbf"
+    ],
+    "first_seen": "2026-09-29T06:07:00",
+    "last_seen": "2026-09-29T06:08:30",
+    "scenario": "regressions/builder-restore-selection",
+    "verify_kind": "expectations",
+    "known_limitation": "",
+    "dt_test": "tests/desktop/test_assessment_ui.py: select a module in the builder's module list, exclude it, assert the list keeps it selected, and assert 'Restore selected module' restores it without reselecting.",
+    "brief": "issues/JEV-0008.md",
+    "replay": "scenarios/JEV-0008.json",
+    "screenshots": [
+      "evidence/JEV-0008-1.png",
+      "evidence/JEV-0008-2.png"
+    ]
+  }
+]

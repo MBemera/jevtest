@@ -1,0 +1,27 @@
+{
+  "name": "02-header-help",
+  "title": "Header: every help topic, both appearances, hiding and showing the panel",
+  "features": ["help-guide", "appearance", "panel-toggle"],
+  "app": {"seed": "empty"},
+  "steps": [
+    {"do": "press_key", "keys": "F1", "expect": {"dialog": "Help guide"}},
+    {"do": "select_option", "target": "Help topic", "option": "Assessment modules"},
+    {"do": "read_text", "target": "Help topic"},
+    {"do": "select_option", "target": "Help topic", "option": "Getting started"},
+    {"do": "select_option", "target": "Help topic", "option": "Prepare"},
+    {"do": "select_option", "target": "Help topic", "option": "Assess and mark key"},
+    {"do": "select_option", "target": "Help topic", "option": "Evidence and review copies"},
+    {"do": "select_option", "target": "Help topic", "option": "Optional findings review"},
+    {"do": "select_option", "target": "Help topic", "option": "Finalise and export"},
+    {"do": "select_option", "target": "Help topic", "option": "Saving, locking and recovery"},
+    {"do": "screenshot", "note": "help guide"},
+    {"do": "click", "target": "Close", "role": "button", "window": "Help guide"},
+    {"do": "select_option", "target": "Workspace appearance", "option": "Classic style"},
+    {"do": "screenshot", "note": "classic style"},
+    {"do": "select_option", "target": "Workspace appearance", "option": "Transport style"},
+    {"do": "click", "target": "Hide panel", "expect": {"contains": "Show panel"}},
+    {"do": "click", "target": "Show panel", "expect": {"contains": "Hide panel"}},
+    {"do": "click", "target": "Help guide (F1)", "expect": {"dialog": "Help guide"}},
+    {"do": "close_window"}
+  ]
+}

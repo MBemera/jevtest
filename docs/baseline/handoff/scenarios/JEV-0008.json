@@ -1,0 +1,100 @@
+{
+  "name": "builder-restore-selection",
+  "title": "Restore selected module works straight after excluding it",
+  "issue": {
+    "id": "JEV-0008",
+    "title": "Module builder clears the module selection after excluding it, so Restore needs a reselect",
+    "severity": "low",
+    "category": "ux",
+    "expected": "The excluded module stays selected, so Restore selected module works at once.",
+    "actual": "The selection is cleared; Restore warns 'Select an included module in the Modules tab'.",
+    "dt_test": "tests/desktop/test_assessment_ui.py: select a module in the builder's module list, exclude it, assert the list keeps it selected, and assert 'Restore selected module' restores it without reselecting.",
+    "suspected": [
+      "dt/assessment_ui.py: AssessmentBuilder.refresh rebuilds lists without restoring the current row"
+    ]
+  },
+  "app": {
+    "seed": "sample"
+  },
+  "steps": [
+    {
+      "do": "click",
+      "target": "New assessment"
+    },
+    {
+      "do": "type_text",
+      "target": "Assessor",
+      "text": "Alex Assessor",
+      "submit": "tab"
+    },
+    {
+      "do": "click",
+      "target": "Build assessment modules / fleet scope"
+    },
+    {
+      "do": "click",
+      "target": "Add unit"
+    },
+    {
+      "do": "type_text",
+      "target": "Unit reference (e.g. trailer_1)",
+      "text": "rigid_1"
+    },
+    {
+      "do": "select_option",
+      "target": "Physical unit type",
+      "option": "rigid"
+    },
+    {
+      "do": "type_text",
+      "target": "Fleet ID",
+      "text": "R-1"
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Physical vehicle unit"
+    },
+    {
+      "do": "select_tab",
+      "tab": "Modules"
+    },
+    {
+      "do": "click",
+      "target": "Suggest from fleet"
+    },
+    {
+      "do": "select_item",
+      "item": 0,
+      "role": "list",
+      "index": 1,
+      "tab_hint": "Modules"
+    },
+    {
+      "do": "click",
+      "target": "Exclude selected module"
+    },
+    {
+      "do": "type_text",
+      "target": "Why remove this check?",
+      "text": "Not fitted"
+    },
+    {
+      "do": "type_text",
+      "target": "Unit / configuration evidence",
+      "text": "Fleet register"
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "window": "Record scope exclusion"
+    },
+    {
+      "do": "click",
+      "target": "Restore selected module",
+      "expect": {
+        "no_message": "Select an included module"
+      }
+    }
+  ]
+}

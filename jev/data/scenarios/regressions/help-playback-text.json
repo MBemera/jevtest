@@ -1,0 +1,16 @@
+{
+  "name": "help-playback-text",
+  "title": "The help guide describes the in-app playback and FFmpeg install that Evidence offers",
+  "issue": {"id": "JEV-0007", "title": "Help guide says video playback is not built in, but Evidence has in-app playback and clipping",
+            "severity": "medium", "category": "copy",
+            "expected": "The 'Evidence and review copies' topic describes Watch video and mark assessment, clipping and Install FFmpeg for video features.",
+            "actual": "It says 'Watch the recording in your video player ... Playback is not built into this version.' and to ask support to configure FFmpeg.",
+            "dt_test": "tests/desktop/test_ui.py: assert TOPICS['Evidence and review copies'] does not say playback is missing, and that it names 'Watch video and mark assessment'.",
+            "suspected": ["dt/help_guide.py: TOPICS['Evidence and review copies']"]},
+  "app": {"seed": "empty"},
+  "steps": [
+    {"do": "press_key", "keys": "F1"},
+    {"do": "select_option", "target": "Help topic", "option": "Evidence and review copies"},
+    {"do": "expect", "value": {"role": "document", "lacks": "Playback is not built into this version"}}
+  ]
+}
