@@ -5,7 +5,8 @@
 - `.mcp.json` registers the `jev` MCP server (tools such as `snapshot`, `click`, `type_text`,
   `report_issue`, `run_qa_agents`). Approve it when Claude Code asks. It uses `$JEV_PYTHON` if set,
   otherwise `python`; that interpreter must be able to `import jev` (run `pip install -e .` here).
-- The `/qa` command (`.claude/commands/qa.md`) runs a QA session on a mission; `/campaign`
+- `/jev` (`.claude/commands/jev.md`) lets the user pick a Jev action from selectable options, like
+  the `jev` terminal menu. The `/qa` command (`.claude/commands/qa.md`) runs a QA session on a mission; `/campaign`
   (`.claude/commands/campaign.md`) runs a full Jev campaign and triages the improvement dataset; the
   `dt-qa` skill (`.claude/skills/dt-qa/`) describes the full workflow and is loaded automatically for
   QA requests.

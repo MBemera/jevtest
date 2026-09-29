@@ -59,6 +59,40 @@ jev doctor                           # checks DT, Qt (headless and on screen), F
 If DT already has its own `.venv`, Jev uses it for the app process automatically. You can also
 set `JEV_PYTHON` to that interpreter.
 
+## Pick from a menu
+
+Run `jev` on its own (or `jev menu`) to choose from menus instead of typing commands. The keys:
+
+- **↑ and ↓:** move through the list.
+- **Enter:** choose.
+- **Typing:** filters the list. For example, `iss` finds *Issues*, and `0002` finds JEV-0002.
+- **Number keys:** pick directly in short lists.
+- **Esc:** goes back.
+
+```
+? What do you want Jev to do?
+  DT: ../DT · display: window · OpenRouter key: set
+❯ Run a full campaign     DT's own tests, sweep, verify, crawlers, then the dataset
+  Run the scripted sweep  every DT feature, scripted (5-10 min)
+  Crawl DT automatically  tries every control with awkward input
+  Run one scenario        a feature journey or a known-issue check
+  Verify known issues     are they fixed on this DT checkout?
+  Run an AI tester        an OpenRouter model on a mission, with a spending cap
+  Drive DT yourself       start DT and use it with jev commands or your own mouse
+  Improvement dataset     build, show or export what the runs found
+  Issues                  list, read, triage or shrink issues
+  Display mode            window (watch on screen) or headless
+  Check setup             DT, Qt, the screen, FFmpeg and the OpenRouter key
+  Show every command      the full command-line reference
+  Quit
+  ↑↓ move · Enter choose · type to filter · Esc back
+```
+
+Each path asks only what it needs, such as the starting records, how long to crawl, which issue,
+or whether DT runs on screen or headless. It then prints the equivalent command
+(`▶ jev crawl --seed none --steps 100 --window`), runs it and returns to the menu, so you also
+learn the commands. In Claude Code, `/jev` offers the same choices as selectable options.
+
 ## Watch the testing on screen, or run headless
 
 By default DT opens **on your screen** whenever a desktop is available, such as a laptop. On a
@@ -207,10 +241,14 @@ These options work on every command that starts DT: `start`, `run`, `matrix`, `s
 
 ## Use it from Claude Code
 
-This repository ships `.mcp.json`, which registers the `jev` MCP server, plus `/qa` and
+This repository ships `.mcp.json`, which registers the `jev` MCP server, plus the `/jev`, `/qa` and
 `/campaign` commands and a `dt-qa` skill. Open Claude Code in this folder and approve the server.
-Then ask, for example, "QA the evidence import flow", run `/qa evidence-media edge-case-hunter`,
-or run `/campaign` to have Jev exercise all of DT and triage the resulting dataset.
+Then:
+
+- type `/jev` to pick what to do from Claude Code's selection prompts;
+- ask, for example, "QA the evidence import flow";
+- run `/qa evidence-media edge-case-hunter`;
+- or run `/campaign`, to have Jev exercise all of DT and triage the resulting dataset.
 
 To make the server available in every project instead, see `examples/claude-code-user-scope.sh`.
 

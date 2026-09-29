@@ -12,6 +12,9 @@ jev doctor            # DT checkout, Qt start (headless and on screen), FFmpeg, 
 jev doctor --online   # also checks OpenRouter reachability and the key
 ```
 
+People can run `jev` with no arguments for an interactive menu. Agents should type the explicit
+commands below (without a terminal, a bare `jev` just prints help).
+
 If `jev` is not on PATH, use `python -m jev ...` from this repository. `JEV_DT_PATH` points at the
 DT checkout (default `../DT`); `JEV_PYTHON` at an interpreter with DT's desktop extra installed
 (default: DT's `.venv`, else the current interpreter).
@@ -99,5 +102,6 @@ against that DT commit; if it comes back later it is marked regressed. Never edi
 - `jev/scenarios.py`, `jev/crawler.py`, `jev/campaign.py`, `jev/dataset.py`, `jev/registry.py`,
   `jev/verify.py`, `jev/triage.py`, `jev/dtsource.py`: see docs/dataset.md.
 - `jev/host/watch.py` is window mode: the step highlight and the guard against the user's own input.
+- `jev/menu.py` is the interactive menu (`jev` with no arguments); each path ends in a normal CLI command.
 - Tests: `python -m unittest discover -s tests` (integration tests start the real app headless;
   `tests/test_window.py` needs a display).

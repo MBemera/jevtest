@@ -396,6 +396,11 @@ def cmd_crawl(args):
     return 0
 
 
+def cmd_menu(args):
+    from .menu import run_menu
+    return run_menu()
+
+
 def cmd_display(args):
     from .config import display_available, display_setting, resolve_display, save_setting, settings_path
     if args.mode:
@@ -644,6 +649,7 @@ def build_parser():
         item.set_defaults(handler=handler)
         return item
 
+    command("menu", cmd_menu, "choose what to do from menus (the same as running jev with no arguments)")
     item = command("doctor", cmd_doctor, "check that DT, Qt, FFmpeg and OpenRouter are ready")
     item.add_argument("--online", action="store_true", help="also contact OpenRouter")
     item = command("start", cmd_start, "start the sandboxed app in the background")
@@ -857,6 +863,13 @@ def main(argv=None):
     if argv[:1] == ["mcp"]:
         from .mcp_server import main as mcp_main
         return mcp_main(argv[1:])
+    if not argv:
+        # On its own, jev opens the menu in a terminal; scripts and pipes get the help text instead.
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            from .menu import run_menu
+            return run_menu()
+        build_parser().print_help()
+        return 0
     parser = build_parser()
     args = parser.parse_args(argv)
     from .session import AppStartError
