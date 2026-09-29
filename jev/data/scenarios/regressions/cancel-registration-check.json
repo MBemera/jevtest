@@ -7,7 +7,8 @@
     "category": "functional",
     "expected": "Cancel registration check stops waiting at once and says so.",
     "actual": "The click is ignored until NHVR answers.",
-    "suspected": [
+    "dt_test": "tests/desktop/test_vehicle_ui.py: patch registration.get_json (or the opener) to block, start an NHVR check, click 'Cancel registration check' and assert the status says cancelled within a second and no result is recorded.",
+            "suspected": [
       "dt/ui.py: registration_rows connects every button, including Cancel registration check, through run_action, which returns while busy()",
       "dt/registration.py: get_json blocks in opener.open for up to 15 s, so even a wired button would wait"
     ]

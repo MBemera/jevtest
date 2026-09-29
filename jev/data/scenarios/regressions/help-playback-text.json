@@ -5,6 +5,7 @@
             "severity": "medium", "category": "copy",
             "expected": "The 'Evidence and review copies' topic describes Watch video and mark assessment, clipping and Install FFmpeg for video features.",
             "actual": "It says 'Watch the recording in your video player ... Playback is not built into this version.' and to ask support to configure FFmpeg.",
+            "dt_test": "tests/desktop/test_ui.py: assert TOPICS['Evidence and review copies'] does not say playback is missing, and that it names 'Watch video and mark assessment'.",
             "suspected": ["dt/help_guide.py: TOPICS['Evidence and review copies']"]},
   "app": {"seed": "empty"},
   "steps": [

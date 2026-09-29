@@ -5,6 +5,7 @@
             "severity": "high", "category": "functional",
             "expected": "After typing KENWORTH and pressing Tab, Truck make is KENWORTH and no 'not in the register' note appears.",
             "actual": "The field holds KENWORTHWORTH ('Ken' gives 'KenT KENWORTH'), and DT records that value.",
+            "dt_test": "tests/desktop/test_vehicle_ui.py: combo = window.vehicle_choices['truck_make']; focus it, QTest.keyClicks(combo.lineEdit(), 'KENWORTH'), press Tab, then assert combo.currentText() == 'KENWORTH' and that the saved preparation holds 'KENWORTH'.",
             "suspected": ["dt/ui.py: MainWindow.searchable_combo sets Qt.MatchContains on the editable combo's default InlineCompletion completer"]},
   "app": {"seed": "empty"},
   "steps": [

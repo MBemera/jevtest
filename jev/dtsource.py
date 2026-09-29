@@ -248,8 +248,14 @@ class SourceIndex:
                 partial.append(item)
             elif len(literal) >= 14 and literal in wanted:
                 partial.append(item)
-        ranked = exact + sorted(partial, key=lambda item: abs(len(normalise(item["text"])) - len(wanted)))
-        return ranked[:limit]
+        def ui_first(item):
+            # Text the UI shows is defined in UI code: prefer UI calls and UI modules over data tables.
+            return (item["kind"] == "string", not (item["file"].endswith("ui.py") or "help_guide" in item["file"]),
+                    not item["function"])
+
+        exact.sort(key=ui_first)
+        partial.sort(key=lambda item: (ui_first(item), abs(len(normalise(item["text"])) - len(wanted))))
+        return (exact + partial)[:limit]
 
     def excerpt(self, file, line, before=4, after=6):
         text = self.files.get(file)

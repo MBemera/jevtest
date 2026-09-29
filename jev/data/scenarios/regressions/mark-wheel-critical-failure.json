@@ -5,6 +5,7 @@
             "severity": "high", "category": "data-loss",
             "expected": "Wheel scrolling over the Mark dropdown does not change the mark (or CF asks for confirmation), and returning the mark leaves the outcome unchanged.",
             "actual": "Four wheel notches move C -> D -> NYC -> NA -> CF with autosave; the record becomes STOPPED / Not yet competent and stays so after the mark is changed back.",
+            "dt_test": "tests/desktop/test_ui.py: open a check on 2 Assess, send QWheelEvents to window.mark_choice without giving it focus, and assert the mark and outcome are unchanged. Also assert that choosing CF asks for confirmation before the session stops.",
             "suspected": ["dt/ui.py: MainWindow.mark_box QComboBox accepts wheel events without focus",
                           "dt/drafts.py: DraftBuffer.mark keeps state 'stopped' once any CF was recorded"]},
   "app": {"seed": "sample"},

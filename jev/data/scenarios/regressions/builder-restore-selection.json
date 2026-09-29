@@ -5,6 +5,7 @@
             "severity": "low", "category": "ux",
             "expected": "The excluded module stays selected, so Restore selected module works at once.",
             "actual": "The selection is cleared; Restore warns 'Select an included module in the Modules tab'.",
+            "dt_test": "tests/desktop/test_assessment_ui.py: select a module in the builder's module list, exclude it, assert the list keeps it selected, and assert 'Restore selected module' restores it without reselecting.",
             "suspected": ["dt/assessment_ui.py: AssessmentBuilder.refresh rebuilds lists without restoring the current row"]},
   "app": {"seed": "sample"},
   "steps": [

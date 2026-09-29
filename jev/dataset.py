@@ -329,7 +329,7 @@ class DatasetBuilder:
             best = best_finding(findings)
             row = dict(issue)
             row.update(occurrences=occurrences, runs=len(runs), run_ids=runs[:50], reporters=reporters,
-                       steps=best_steps(issue, best), evidence=best_evidence(findings),
+                       steps=issue.get("minimal_steps") or best_steps(issue, best), evidence=best_evidence(findings),
                        code=self.locate(issue, findings, index), known_limitation=self.limitation_for(issue))
             row["score"] = issue_score(row)
             rows.append(row)
@@ -374,7 +374,11 @@ class DatasetBuilder:
                     texts.append((target["name"], f"the control '{target['name']}'"))
             for text in quoted_texts(" ".join(str(finding.get(key) or "") for key in ("title", "actual", "expected"))):
                 texts.append((text, f"text '{text[:60]}'"))
-            for step in (finding.get("steps") or [])[-2:] if isinstance(finding.get("steps"), list) else []:
+            if finding.get("source") == "harness" and finding.get("category") == "copy":
+                shown = str(finding.get("actual") or "")
+                head = re.split(r"[\[]|: ", shown, maxsplit=1)[0].strip()
+                texts.append((head if len(head) >= 10 else shown[:200], "the text shown on screen"))
+            for step in (finding.get("steps") or [])[-1:] if isinstance(finding.get("steps"), list) else []:
                 for text in quoted_texts(str(step)):
                     texts.append((text, f"the step '{str(step)[:60]}'"))
         for text in quoted_texts(" ".join(str(issue.get(key) or "") for key in ("title", "expected", "actual"))):
@@ -533,6 +537,9 @@ class DatasetBuilder:
 
     # ----- copy, inputs and speed ----------------------------------------------------
     def copy_checks(self, index):
+        # Leaked error text the harness already reported is an issue in its own right; do not list it twice.
+        reported = {normalise(str(finding.get("actual") or ""))[:80] for finding in self.findings
+                    if finding.get("source") == "harness" and finding.get("category") == "copy"}
         texts = {}
         if index is not None:
             for item in index.strings:
@@ -563,6 +570,8 @@ class DatasetBuilder:
             text = str(item["text"])
             screen = item["origin"] == "screen"
             if ERROR_LEAK.search(text) and (screen or item["kind"] in ("message", "status")):
+                if screen and normalise(text)[:80] in reported:
+                    continue
                 problems.append(dict(item, check="technical error text", severity="medium",
                                      detail="Shows exception or system error wording to the user."))
             elif TECH_TERMS.search(text) and item["kind"] not in ("error",) and len(text) < 400:
@@ -749,9 +758,10 @@ class DatasetBuilder:
                   "code_functions": functions, "code_files": files, "copy_texts": texts, "copy_problems": problems,
                   "copy_terms": conflicts, "inputs": inputs, "performance": speed, "improvements": backlog}
         self.write_tables(tables)
+        history = self.record_history(summary)
         (self.out / "dataset.json").write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
         (self.out / "improvements.md").write_text(render_improvements(summary, issues, backlog, files, controls, unseen,
-                                                                      problems, conflicts, speed),
+                                                                      problems, conflicts, speed, history),
                                                   encoding="utf-8")
         (self.out / "README.md").write_text(DATASET_README, encoding="utf-8")
         if self.handoff:
@@ -786,6 +796,23 @@ class DatasetBuilder:
                      "term_conflicts": len(conflicts)},
             "improvements": len(backlog), "notes": self.notes,
         }
+
+    def record_history(self, summary):
+        """One line per build, so DT's progress (open issues, coverage) can be followed over time."""
+        path = self.out / "history.jsonl"
+        entry = {"built": summary["built"], "dt_commit": str((summary["dt"].get("current") or {}).get("commit") or "")[:12],
+                 "runs": summary["runs"]["total"], "active_issues": summary["issues"]["active"],
+                 "by_status": summary["issues"]["by_status"],
+                 "active_by_severity": summary["issues"]["active_by_severity"],
+                 "code_percent": summary["code"]["percent"], "functions_run": summary["code"]["functions_run"],
+                 "ui_used": summary["ui"]["used"], "unlabelled": summary["ui"]["unlabelled"],
+                 "labels_never_seen": summary["ui"]["labels_never_seen"], "copy_problems": summary["copy"]["problems"]}
+        history = read_jsonl(path)
+        if not history or {k: v for k, v in history[-1].items() if k != "built"} != \
+                {k: v for k, v in entry.items() if k != "built"}:
+            history.append(entry)
+            write_jsonl(path, history[-500:])
+        return history
 
     def write_tables(self, tables):
         database = self.out / "jev-dataset.sqlite"
@@ -919,7 +946,7 @@ def write_jsonl(path, rows):
 
 
 # ----- reports -----------------------------------------------------------------------
-def render_improvements(summary, issues, backlog, files, controls, unseen, problems, conflicts, speed):
+def render_improvements(summary, issues, backlog, files, controls, unseen, problems, conflicts, speed, history=()):
     dt = summary["dt"]
     current = dt.get("current") or {}
     lines = ["# DT improvement backlog (from Jev runs)", "",
@@ -944,6 +971,14 @@ def render_improvements(summary, issues, backlog, files, controls, unseen, probl
               "mixed-term groups", ""]
     if summary.get("notes"):
         lines += ["Notes: " + " ".join(summary["notes"]), ""]
+    if len(history) > 1:
+        lines += ["## Trend", "", "| Built | DT | Open issues | Fixed | Code run % | Controls used | Unlabelled |",
+                  "|---|---|---|---|---|---|---|"]
+        for entry in list(history)[-10:]:
+            lines.append(f"| {entry['built']} | `{entry['dt_commit']}` | {entry['active_issues']} | "
+                         f"{entry['by_status'].get('fixed', 0)} | {entry['code_percent']} | {entry['ui_used']} | "
+                         f"{entry['unlabelled']} |")
+        lines.append("")
     lines += ["## Ranked backlog", "", "| # | ID | Kind | Severity | Priority | What | Where |", "|---|---|---|---|---|---|---|"]
     for item in backlog[:60]:
         lines.append(f"| {item['rank']} | {item['id']} | {item['kind']} | {item['severity']} | {item['priority']} | "
@@ -1049,7 +1084,7 @@ def write_handoff(folder, issues, backlog, summary, index, run_index):
         machine.append({key: issue.get(key) for key in (
             "id", "title", "status", "severity", "category", "classification", "confidence", "score", "rank",
             "expected", "actual", "steps", "code", "suspected", "occurrences", "runs", "reporters", "dt_commits",
-            "first_seen", "last_seen", "scenario", "verify_kind", "known_limitation")} |
+            "first_seen", "last_seen", "scenario", "verify_kind", "known_limitation", "dt_test")} |
             {"brief": f"issues/{issue['id']}.md", "replay": scenario_path, "screenshots": shots})
     (folder / "issues.json").write_text(json.dumps(machine, indent=2, ensure_ascii=False, default=str) + "\n",
                                         encoding="utf-8")
@@ -1100,7 +1135,10 @@ def render_brief(issue, scenario_path, shots, index, run_index):
         lines += [f"> This may be a documented limitation of DT: \"{issue['known_limitation']}\". "
                   "If so, mark it with `jev issues set " + issue["id"] + " --status known-limitation`.", ""]
     if issue.get("steps"):
-        lines += ["## Reproduce", ""] + [f"{number}. {step}" for number, step in enumerate(issue["steps"], 1)] + [""]
+        minimised = issue.get("minimised") or {}
+        heading = "## Reproduce" + (f" (reduced automatically from {minimised['from']} steps)"
+                                    if issue.get("minimal_steps") and minimised.get("from") else "")
+        lines += [heading, ""] + [f"{number}. {step}" for number, step in enumerate(issue["steps"], 1)] + [""]
     if scenario_path.startswith("scenarios/"):
         lines += [f"Replay with Jev: `jev scenario run {issue.get('scenario')}` (copy in `{scenario_path}`).", ""]
     lines += ["## Where to look", ""]
@@ -1124,13 +1162,26 @@ def render_brief(issue, scenario_path, shots, index, run_index):
     if runs:
         lines += ["Runs: " + "; ".join(f"{run['id']} ({run['kind']}{', ' + run['model'] if run.get('model') else ''})"
                                        for run in runs), ""]
+    if issue.get("dt_test"):
+        lines += ["## Suggested DT regression test", "", issue["dt_test"], ""]
     lines += ["## Definition of done", "",
               "1. The fix is on a DT branch with a DT regression test that fails without it.",
               f"2. `JEV_DT_PATH=<that checkout> jev verify --issue {issue['id']}` passes"
               + ("." if issue.get("scenario") else " (no automatic replay yet: re-run the steps above by hand or with "
                                                     "`jev` CLI tools, then `jev issues set " + issue["id"]
                                                     + " --status fixed`)."),
-              "3. The next `jev campaign` does not report it again.", ""]
+              "3. The next `jev campaign` does not report it again.", "",
+              "## Task for a coding agent in the DT repository", "",
+              "```text",
+              f"Fix {issue['id']} in DT: {issue['title']}.",
+              f"Expected: {issue.get('expected') or 'see the brief'}",
+              f"Actual: {str(issue.get('actual') or 'see the brief')[:400]}",
+              "Start from: " + (", ".join(f"{place['file']}:{place['line']} ({place['function']})"
+                                         for place in (issue.get("code") or [])[:3]) or "the steps in the brief") + ".",
+              "Work on a branch, follow DT's own AGENTS.md, and add a regression test that fails before the fix"
+              + (f" ({issue['dt_test']})" if issue.get("dt_test") else "") + ".",
+              "Run DT's unit and desktop test suites before finishing.",
+              "```", ""]
     return "\n".join(lines)
 
 
@@ -1160,6 +1211,7 @@ issue registry (`registry.json`) keeps issue IDs and status between builds.
 | `performance.csv` | Per action and control: latency until idle and interface freezes |
 | `improvements.csv/.jsonl` | The ranked backlog as data |
 | `dataset.json` | Build summary: counts, DT commit, notes |
+| `history.jsonl` | One line per build: open issues, coverage and copy numbers, for trends |
 
 Priority scores: issues use severity points (critical 100, high 60, medium 30, low 10) times
 category, confidence, reach (runs that hit it) and reporter weights; regressions count 1.3x and

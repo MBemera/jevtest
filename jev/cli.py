@@ -34,7 +34,7 @@ def session_root(name, fresh=False):
 
 def app_options(args):
     options = {}
-    for key in ("screen", "network", "seed", "ffmpeg", "idle_timeout_ms"):
+    for key in ("screen", "network", "seed", "ffmpeg", "idle_timeout_ms", "coverage"):
         value = getattr(args, key, None)
         if value is not None:
             options[key] = value
@@ -499,6 +499,26 @@ def cmd_verify(args):
     return 1 if any(row["result"] in ("reproduced",) and row.get("status") == "regressed" for row in rows) else 0
 
 
+def cmd_minimise(args):
+    from .minimise import minimise_issue
+    from .registry import Registry, dataset_dir
+    out = Path(args.dataset) if args.dataset else dataset_dir()
+    registry = Registry(out / "registry.json")
+    folder = Path(args.out) if args.out else runs_dir() / f"minimise-{time.strftime('%Y%m%d-%H%M%S')}"
+    try:
+        result = minimise_issue(registry, args.id, folder, scenarios_dir=out / "scenarios", max_minutes=args.max_minutes,
+                                app_overrides=app_options(args))
+    except (KeyError, ValueError) as error:
+        print(error.args[0] if error.args else error)
+        return 1
+    registry.save()
+    issue = registry.get(args.id)
+    if result["reproduced"]:
+        print("\n".join(f"{number}. {step}" for number, step in enumerate(issue.get("minimal_steps") or [], 1)))
+        print(f"Scenario: {issue['scenario']} (run `jev dataset build` to refresh the brief)")
+    return 0 if result["reproduced"] else 1
+
+
 def cmd_triage(args):
     from .registry import dataset_dir
     from .triage import triage
@@ -517,7 +537,7 @@ def cmd_campaign(args):
         max_steps=args.max_steps, parallel=args.parallel, crawls=args.crawls, crawl_steps=args.crawl_steps,
         dt_tests=not args.no_dt_tests, dt_mutation=args.dt_mutation, sweep=not args.no_sweep,
         verify=not args.no_verify, gap_missions=args.gap_missions, dataset=args.dataset, app=app_options(args),
-        quiet=args.quiet)
+        quiet=args.quiet, random_seed=args.random_seed, minimise=args.minimise)
     summary = Campaign(options).run()
     print(f"\nCampaign report: {summary['report']}")
     return 0 if summary.get("ok") else 1
@@ -537,6 +557,8 @@ def add_app_options(parser):
                         help="none = first-run unlock screen; empty/sample = unlocked vault (sample has 3 records)")
     parser.add_argument("--ffmpeg", choices=["auto", "none"], help="auto = give DT the machine's FFmpeg; none = hide it")
     parser.add_argument("--idle-timeout-ms", type=int, dest="idle_timeout_ms", help="override DT's 5 minute idle lock")
+    parser.add_argument("--coverage", choices=["auto", "on", "off"],
+                        help="measure which DT code runs (auto = with coverage.py when installed)")
 
 
 def add_agent_options(parser):
@@ -701,6 +723,12 @@ def build_parser():
     item.add_argument("--dataset")
     item.add_argument("--quiet", action="store_true")
     add_app_options(item)
+    item = command("minimise", cmd_minimise, "shrink an issue's replay to the steps that still trigger it")
+    item.add_argument("id")
+    item.add_argument("--max-minutes", type=float, default=5.0)
+    item.add_argument("--out")
+    item.add_argument("--dataset")
+    add_app_options(item)
     item = command("triage", cmd_triage, "optional: ask an OpenRouter model to classify unconfirmed issues")
     item.add_argument("--model", default="auto", help="model ID or auto (cheapest capable)")
     item.add_argument("--max-cost", type=float, default=0.25)
@@ -720,6 +748,9 @@ def build_parser():
     item.add_argument("--crawls", type=int, default=2, help="crawler runs, each with its own random seed")
     item.add_argument("--crawl-steps", type=int, default=250)
     item.add_argument("--gap-missions", type=int, default=3, help="missions written from coverage gaps")
+    item.add_argument("--random-seed", type=int, dest="random_seed",
+                      help="crawler seed for this campaign (default: varies with the time, printed in the report)")
+    item.add_argument("--minimise", type=int, default=3, help="new harness-detected issues to shrink to minimal repros")
     item.add_argument("--no-dt-tests", action="store_true", help="skip DT's own unit and desktop tests")
     item.add_argument("--dt-mutation", action="store_true", help="also run DT's mutation check (slow)")
     item.add_argument("--no-sweep", action="store_true")

@@ -100,6 +100,8 @@ class Registry:
                 if block.get(key):
                     issue[key] = block[key]
             issue["suspected"] = list(block.get("suspected") or [])
+            if block.get("dt_test"):
+                issue["dt_test"] = block["dt_test"]
             issue["scenario"] = reference
             issue["verify_kind"] = "expectations"
             names = set(issue.get("scenario_names") or [])

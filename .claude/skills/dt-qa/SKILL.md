@@ -1,6 +1,6 @@
 ---
 name: dt-qa
-description: Use when asked to QA, test, explore, find bugs, UX problems or edge cases in the DT desktop app (driver training / assessment app), to run OpenRouter AI testers against it, or to triage Jev QA findings and reports.
+description: Use when asked to QA, test, explore, find bugs, UX problems or edge cases in the DT desktop app (driver training / assessment app), to run OpenRouter AI testers or a full Jev campaign against it, to build or read the Jev improvement dataset and issue registry, to verify DT fixes, or to triage Jev QA findings and reports.
 ---
 # QA the DT app with Jev
 
@@ -19,6 +19,14 @@ actions. Everything here is synthetic data in a disposable sandbox.
   listed by `sandbox_info`.
 - `report_issue` for each distinct, reproduced problem (steps from app start, expected vs actual).
 
+## Let Jev run everything
+- `run_campaign` (MCP) or `jev campaign`: DT's own tests, the scripted sweep, verification of known
+  issues, crawlers, then the dataset. Add `budget` for OpenRouter testers. Follow with `campaign_status`.
+- `dataset` (show/build), `issues` (list, or one brief with `id`), `set_issue` (record a triage decision),
+  `verify_issues` (replay known issues on the current DT checkout).
+- Outputs: `dataset/improvements.md`, `dataset/handoff/issues/JEV-*.md`, `dataset/registry.json`;
+  see docs/dataset.md.
+
 ## Delegate to OpenRouter testers
 - `run_qa_agents` (MCP) or `jev matrix --models trio --missions ... --personas ... --max-cost 1`.
 - Presets are in `jev/data/model_presets.json`; `jev models --tools` lists current model IDs.
@@ -27,5 +35,7 @@ actions. Everything here is synthetic data in a disposable sandbox.
 ## Triage
 Reproduce each finding, read the DT source to locate the cause, and classify it as confirmed bug,
 UX issue, by design, known limitation (see DT README) or harness artefact (offscreen rendering,
-stand-in file chooser, blocked network, no audio/GPU). Report confirmed items first with
-minimal steps, evidence paths and suspected code locations.
+stand-in file chooser, blocked network, no audio/GPU). Record the decision with `set_issue`
+(`jev issues set`). Report confirmed items first with minimal steps, evidence paths and suspected
+code locations. For a confirmed new bug, add a regression scenario under
+`jev/data/scenarios/regressions/` with an `issue` block, so `jev verify` can track its fix.

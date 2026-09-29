@@ -99,7 +99,8 @@ def auto_findings(events, *, step=None, screen=""):
         elif kind == "suspicious_text":
             found.append(dict(base, title=f"Technical error text shown to the user ({event.get('where')})",
                               severity="medium", category="copy",
-                              signature="text@" + normalise_title(event.get("text", ""))[:80],
+                              signature=text_signature(event.get("where", ""), event.get("text", ""),
+                                                       event.get("reason", "")),
                               actual=event.get("text", ""), expected="A plain-language message that says what to do next.",
                               details=event.get("reason", "")))
         elif kind == "qt_message" and event.get("level") in ("critical", "fatal"):
@@ -111,6 +112,13 @@ def auto_findings(events, *, step=None, screen=""):
                               category="other", signature="qtw@" + normalise_title(event.get("message", ""))[:80],
                               actual=event.get("message", "")))
     return found
+
+
+def text_signature(where, text, reason):
+    """Same place and same kind of leaked error = same issue, whatever file name or number it quotes."""
+    head = re.split(r"[\[:]", str(text or ""), maxsplit=1)[0]
+    head = re.sub(r"\d+", "#", normalise_title(head))[:60].strip()
+    return f"text@{where}|{head or reason}"
 
 
 def stack_signature(stack):

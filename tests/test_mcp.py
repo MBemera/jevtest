@@ -55,6 +55,26 @@ class McpProtocolTests(TempDirTestCase):
         unknown = server.request("tools/call", {"name": "qa_runs", "arguments": {}})
         self.assertFalse(unknown["result"]["isError"])
 
+    def test_issue_registry_tools(self):
+        server = McpServerProcess(self.root / "session")
+        self.addCleanup(server.close)
+        server.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                      "clientInfo": {"name": "unit-test", "version": "0"}})
+        tools = {tool["name"] for tool in server.request("tools/list")["result"]["tools"]}
+        self.assertTrue({"run_campaign", "campaign_status", "dataset", "issues", "set_issue", "verify_issues"} <= tools)
+
+        def call(name, **arguments):
+            return server.request("tools/call", {"name": name, "arguments": arguments})["result"]
+
+        listed = call("issues", status="all")
+        self.assertIn("JEV-0001", listed["content"][0]["text"])
+        changed = call("set_issue", id="JEV-0008", status="wontfix", note="unit test decision")
+        self.assertIn("wontfix", changed["content"][0]["text"])
+        shown = call("issues", id="JEV-0008")["content"][0]["text"]
+        self.assertIn("unit test decision", shown)
+        self.assertIn("No dataset", call("dataset")["content"][0]["text"])
+        self.assertIn("No campaign", call("campaign_status")["content"][0]["text"])
+
 
 @requires_app
 class McpAppTests(TempDirTestCase):

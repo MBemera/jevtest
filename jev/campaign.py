@@ -8,9 +8,10 @@ Stages, each recorded in ``progress.json`` and the campaign ``report.md``:
 3. sweep        - every scripted feature journey, with soft checks on known issues
 4. verify       - replays the scenario behind every known issue: fixed, still open, regressed
 5. crawl        - seeded crawlers on different starting states (sample records, first run, empty)
-6. gaps         - interim dataset; writes missions aimed at code and screens nobody reached
-7. ai-testers   - OpenRouter testers on core and gap missions, only with --budget and a key
-8. dataset      - the final dataset, backlog and DT handoff
+6. minimise     - shrinks the replays of new harness-detected issues to the few steps that matter
+7. gaps         - writes missions aimed at code and screens nobody reached (for AI testers)
+8. ai-testers   - OpenRouter testers on core and gap missions, only with --budget and a key
+9. dataset      - the final dataset, backlog and DT handoff
 """
 
 import json
@@ -48,6 +49,8 @@ class CampaignOptions:
     sweep: bool = True
     verify: bool = True
     gap_missions: int = 3
+    minimise: int = 3
+    minimise_minutes: float = 4.0
     dataset: str = None
     app: dict = field(default_factory=dict)
     quiet: bool = False
@@ -65,6 +68,9 @@ class Campaign:
         self.stages = []
         self.facts = {}
         self.started = time.time()
+        # Scenarios and crawlers choose their own starting records; the campaign may still change the
+        # screen size, network mode, FFmpeg availability or idle timeout for all of them.
+        self.app = {key: value for key, value in (options.app or {}).items() if key != "seed" and value is not None}
 
     # ----- plumbing -------------------------------------------------------------------
     def log(self, message):
@@ -121,7 +127,7 @@ class Campaign:
 
     def sweep(self):
         from .scenarios import find_scenarios, run_suite
-        results = run_suite(find_scenarios("sweep"), self.root / "sweep", app_overrides=self.options.app,
+        results = run_suite(find_scenarios("sweep"), self.root / "sweep", app_overrides=self.app,
                             quiet=self.options.quiet)
         passed = sum(1 for result in results if result.passed)
         self.facts["sweep"] = {"passed": passed, "total": len(results),
@@ -131,7 +137,7 @@ class Campaign:
     def verify(self):
         from .verify import verify
         _, rows = verify(out_dir=self.root / "verify", registry_path=self.dataset / "registry.json",
-                         app_overrides=self.options.app, quiet=self.options.quiet)
+                         app_overrides=self.app, quiet=self.options.quiet)
         counts = {}
         for row in rows:
             counts[row["result"]] = counts.get(row["result"], 0) + 1
@@ -145,7 +151,7 @@ class Campaign:
             profile = CRAWL_PROFILES[number % len(CRAWL_PROFILES)]
             seed = self.seed + number
             options = {"seed": profile, "network": "mock"}
-            options.update({key: value for key, value in self.options.app.items() if key != "seed"})
+            options.update(self.app)
             summary = Crawler(self.root / f"crawl-{profile}-r{seed}", steps=self.options.crawl_steps, seed=seed,
                               app_options=options, quiet=True).run()
             done.append({"profile": profile, "seed": seed, "controls_used": summary["controls_used"],
@@ -157,9 +163,37 @@ class Campaign:
         return "; ".join(f"{item['profile']} r{item['seed']}: {item['controls_used']} controls, "
                          f"{item['findings']} findings" for item in done)
 
+    def interim_dataset(self):
+        if not self.facts.get("interim_dataset"):
+            from .dataset import build
+            build(out_dir=self.dataset, handoff=False, quiet=True)
+            self.facts["interim_dataset"] = True
+
+    def minimise(self):
+        """Shrink the replays of new harness-detected issues to the steps that matter."""
+        from .minimise import minimisable, minimise_issue
+        from .registry import ACTIVE, Registry
+        self.interim_dataset()
+        registry = Registry(self.dataset / "registry.json")
+        pending = [issue for issue in registry.issues.values() if issue.get("status") in ACTIVE
+                   and minimisable(issue) and issue.get("scenario") and not issue.get("minimised")]
+        pending.sort(key=lambda issue: issue["id"])
+        results = []
+        for issue in pending[:self.options.minimise]:
+            try:
+                result = minimise_issue(registry, issue["id"], self.root / "minimise",
+                                        scenarios_dir=self.dataset / "scenarios", max_minutes=self.options.minimise_minutes,
+                                        app_overrides=self.app, log=self.log)
+                results.append(f"{issue['id']} {result['original']}->{len(result['steps'])}"
+                               if result["reproduced"] else f"{issue['id']} not reproducible")
+            except (KeyError, ValueError, OSError) as error:
+                results.append(f"{issue['id']} skipped ({error})")
+            registry.save()
+        self.facts["minimise"] = results
+        return "; ".join(results) or "nothing new to minimise"
+
     def gaps(self):
-        from .dataset import build
-        build(out_dir=self.dataset, handoff=False, quiet=True)
+        self.interim_dataset()
         written = write_gap_missions(self.dataset, self.root / "missions", self.options.gap_missions)
         self.facts["gap_missions"] = [str(path) for path in written]
         return f"{len(written)} gap mission(s): " + ", ".join(path.stem for path in written)
@@ -175,7 +209,7 @@ class Campaign:
         runs = len(models) * len(missions) * len(personas)
         per_run = round(self.options.budget / max(1, runs), 4)
         base = RunConfig(model=models[0], max_steps=self.options.max_steps, max_cost=per_run,
-                         app={key: value for key, value in self.options.app.items() if value is not None},
+                         app=dict(self.app),
                          quiet=self.options.quiet)
         root, results = run_matrix(base, models, missions, personas, parallel=self.options.parallel,
                                    out_dir=self.root / "matrix")
@@ -209,6 +243,7 @@ class Campaign:
         self.stage("sweep", self.sweep, None if options.sweep else "disabled with --no-sweep")
         self.stage("verify", self.verify, None if options.verify else "disabled with --no-verify")
         self.stage("crawl", self.crawl, None if options.crawls > 0 else "--crawls 0")
+        self.stage("minimise", self.minimise, None if options.minimise > 0 else "--minimise 0")
         key = bool(os.environ.get("OPENROUTER_API_KEY"))
         ai_skip = None
         if options.budget <= 0:

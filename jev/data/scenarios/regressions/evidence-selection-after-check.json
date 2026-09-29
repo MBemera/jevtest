@@ -5,6 +5,7 @@
             "severity": "medium", "category": "ux",
             "expected": "After the media check the same file stays selected and Watch video and mark assessment opens it.",
             "actual": "The evidence list is rebuilt with nothing selected and the next button warns 'Select an imported file first'.",
+            "dt_test": "tests/desktop/test_ui.py: import a fixture video, select it in window.assets, run 'Check video file' and wait for analysis_complete, then assert window.assets.currentRow() still points at the same file.",
             "suspected": ["dt/ui.py: MainWindow.analysis_complete -> refresh_sessions -> populate_session clears self.assets"]},
   "app": {"seed": "sample"},
   "steps": [

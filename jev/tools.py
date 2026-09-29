@@ -490,6 +490,11 @@ class ToolRunner:
             stored, created = self.store.add(finding)
             if created:
                 found.append(stored)
+                if stored.get("category") in ("copy", "exception", "other", "performance"):
+                    # The screen still shows what went wrong; a frozen or crashed app cannot be captured.
+                    evidence = self.capture_evidence(stored, stem=stored["id"])
+                    if evidence:
+                        self.store.update(stored["id"], evidence=evidence)
         self.new_findings.extend(found)
         return found
 
@@ -537,12 +542,12 @@ class ToolRunner:
                 return f"{finding['id']} ({finding['title']})"
         return ""
 
-    def capture_evidence(self, finding, target=None):
+    def capture_evidence(self, finding, target=None, stem=None):
         evidence = {}
         if self.session is None or self.session.client is None:
             return evidence
         try:
-            number = f"F{len(self.store.findings) + 1:03d}"
+            number = stem or f"F{len(self.store.findings) + 1:03d}"
             shot = self.session.call("screenshot", {"marks": False})
             evidence["screenshot"] = str(self.save_image(base64.b64decode(shot["png_base64"]), number))
             snapshot = self.session.call("snapshot")

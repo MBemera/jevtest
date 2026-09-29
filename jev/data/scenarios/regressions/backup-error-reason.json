@@ -5,6 +5,7 @@
             "severity": "medium", "category": "ux",
             "expected": "The status says 'Choose a backup location outside the active vault'.",
             "actual": "The status says 'Operation failed. Check destination space, file access and evidence integrity.'",
+            "dt_test": "tests/desktop/test_ui.py: run MaintenanceWorker (or start_maintenance) with a backup folder inside the vault and assert the message shown contains 'outside the active vault'.",
             "suspected": ["dt/ui.py: MaintenanceWorker.run replaces every exception with one generic message"]},
   "app": {"seed": "sample"},
   "steps": [

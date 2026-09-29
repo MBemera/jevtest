@@ -5,6 +5,7 @@
             "severity": "high", "category": "functional",
             "expected": "Cancel report request stops waiting at once and the status bar says the request was cancelled (README promise).",
             "actual": "The click is ignored until the provider answers.",
+            "dt_test": "tests/desktop/test_ui.py: patch the report provider so the request blocks on a threading.Event, call draft_report, click the 'Cancel report request' button while busy() is true, and assert the status bar says the request was cancelled and a late reply is discarded.",
             "suspected": ["dt/ui.py: finalise_tab wires 'Cancel report request' through MainWindow.button -> run_action, which returns while busy()"]},
   "app": {"seed": "sample", "network": "mock"},
   "steps": [

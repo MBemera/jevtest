@@ -17,13 +17,22 @@ be Claude Code, Codex, or any tool-calling model on OpenRouter.
   - technical error text shown to users
 - Findings come with evidence: a screenshot, a snapshot and recent events. Findings from several
   runs and models are merged into one report.
+- Besides AI testers, Jev drives DT itself: a **scripted sweep** of every feature, **regression
+  scenarios** for known issues, a seeded **crawler** that uses every reachable control with
+  edge-case input, and DT's **own test suites**. Every run records its steps and which DT code ran.
+- `jev dataset build` turns all runs into an **improvement dataset for DT**: a registry of issues with
+  stable IDs, a ranked backlog, fix briefs with code locations, and coverage of DT's screens and code.
+  `jev verify` replays each issue on a DT checkout and marks it fixed or regressed.
 
 ```
  Claude Code / Codex ──MCP (stdio)──┐                  ┌──────────── app process ─────────────┐
- jev CLI (any agent's shell) ───────┼─> tools.py ──TCP─┤ control server → Qt GUI thread        │
- jev run / matrix (OpenRouter) ─────┘   findings        │ snapshot · actions · monitors · guards│
-        │                               reports         │ DT: dt.ui.main() unchanged, offscreen │
-        └── OpenRouter chat completions (tool calling)  └───────────────────────────────────────┘
+ jev CLI (any agent's shell) ───────┤                  │ control server → Qt GUI thread        │
+ jev run / matrix (OpenRouter) ─────┼─> tools.py ──TCP─┤ snapshot · actions · monitors · guards│
+ jev sweep / scenario / crawl ──────┘   steps.jsonl     │ coverage probe                        │
+        │                               findings        │ DT: dt.ui.main() unchanged, offscreen │
+        │                                               └───────────────────────────────────────┘
+ jev campaign ── runs all of the above + DT's own tests ──> jev dataset build ──> registry, backlog,
+                                                            jev verify               handoff for DT
 ```
 
 ## Install
@@ -46,6 +55,79 @@ jev doctor                           # checks DT, Qt offscreen start, FFmpeg, Op
 
 If DT already has its own `.venv`, Jev uses it for the app process automatically. You can also
 set `JEV_PYTHON` to that interpreter.
+
+## Run everything and build the improvement dataset
+
+```bash
+jev campaign                          # ~20 min, no model cost: DT tests, sweep, verify, 2 crawls, dataset
+jev campaign --budget 3 --models auto:3   # adds OpenRouter testers on core and coverage-gap missions
+jev dataset show                      # what the dataset says now
+jev issues                            # open issues, highest priority first
+jev issues show JEV-0003              # the fix brief: repro steps, evidence, code locations
+```
+
+A campaign runs these stages and records each in `runs/campaign-*/report.md`:
+
+| Stage | What it does |
+| --- | --- |
+| dt-tests | DT's unit and desktop suites under coverage. Read-only: DT's git status is compared before and after |
+| sweep | 16 scripted journeys through every feature (`jev/data/scenarios/sweep/`), with soft checks on known issues |
+| verify | replays the scenario of every known issue: still open, fixed, or regressed |
+| crawl | seeded crawlers starting from sample records, the first-run screen and an empty vault |
+| minimise | shrinks the replays of new harness-detected issues (exceptions, crashes, freezes, leaked error text) to the few steps that still trigger them |
+| ai-testers | only with `--budget` and a key: OpenRouter testers on core missions plus missions written from coverage gaps, each run capped at its share of the budget |
+| dataset | rebuilds the dataset, backlog and DT handoff |
+
+The dataset (default `dataset/` next to `runs/`, or `$JEV_DATASET_DIR`) holds:
+
+- `improvements.md`: one ranked backlog. It lists issues first, then code no run has executed,
+  labels DT defines that never appeared on screen, unlabelled controls, wording problems, mixed
+  terminology and slow actions.
+- `handoff/`: what DT's developers (or a coding agent in the DT repo) work from. It has a brief per
+  open issue with repro steps, expected and actual behaviour, screenshots, code locations with
+  excerpts, a replayable scenario and a definition of done. `handoff/issues.json` has the same data.
+- `registry.json`: issues keep their `JEV-####` ID across builds, with a status history tied to
+  DT commits. Known issues shipped with Jev are `JEV-0001` to `JEV-0100`; discovered ones start at
+  `JEV-0101`. Share or commit this file to keep IDs stable across machines.
+- `jev-dataset.sqlite` plus CSV/JSONL copies. Tables: runs, every step, findings, issues, UI
+  controls, per-function code coverage (Jev runs vs DT's own tests), copy checks, every typed input
+  with DT's reaction, and latency. [docs/dataset.md](docs/dataset.md) describes each table.
+
+The fix loop for DT:
+
+```bash
+jev issues show JEV-0003                                  # read the brief
+# fix it in DT on a branch, add a DT regression test
+JEV_DT_PATH=/path/to/DT-branch jev verify --issue JEV-0003  # replay: passes -> marked fixed with the commit
+jev campaign                                              # later runs mark it regressed if it comes back
+```
+
+`jev issues set JEV-0105 --status by-design --note "..."` records a triage decision.
+`jev triage --max-cost 0.25` optionally asks a cheap OpenRouter model to classify unconfirmed
+issues. It only routes to providers that do not store prompts, records its reasoning, and
+changes an issue only when confident.
+
+## Scripted checks and the crawler (no model needed)
+
+```bash
+jev sweep                             # every feature, scripted, ~8 min; summary in runs/sweep-*/summary.md
+jev scenario list                     # sweep/ and regressions/ scenarios
+jev scenario run regressions/cancel-report-request
+jev scenario record runs/<run> --out my-journey.json   # turn any recorded run into a replayable scenario
+jev crawl --steps 300 --random-seed 7 --seed none      # explore from the first-run screen
+jev minimise JEV-0102                 # shrink an issue's replay to the steps that still trigger it
+```
+
+A scenario is JSON: a list of steps (`{"do": "click", "target": "Save", "expect": {"dialog":
+"Saved"}}`) using labels rather than refs, so it survives DT layout changes. Expectations can
+check dialogs, messages, status text, screen contents, values, network use and uncaught
+exceptions (always checked). A failed expectation is recorded as a finding with evidence. The
+crawler weighs never-used controls first, types edge-case text (empty, very long, Unicode, markup,
+SQL-like, paths, bad dates), picks every tab, row and option, handles dialogs and restarts DT after
+a crash. The same `--random-seed` replays the same journey on the same DT build, and each finding
+gets a replay scenario. `jev minimise` (and the campaign's minimise stage) then replays shorter and
+shorter versions (delta debugging) and keeps the shortest one that still produces the same
+signature, so a crawler bug found after 150 steps usually ends up as a repro of 2 to 5 steps.
 
 ## Drive the app yourself (CLI)
 
@@ -156,6 +238,7 @@ These tools are shared by MCP and the OpenRouter agent; the CLI has the same com
 | `report_issue` | record a finding; a screenshot, snapshot and events are attached |
 | `note`, `finish` | OpenRouter agent only |
 | `app_start`, `app_stop`, `findings`, `run_qa_agents`, `qa_runs` | MCP only |
+| `run_campaign`, `campaign_status`, `dataset`, `issues`, `set_issue`, `verify_issues` | MCP only: campaigns in the background, the dataset, the issue registry and verification |
 
 ## Sandbox and safety
 
@@ -183,6 +266,16 @@ These tools are shared by MCP and the OpenRouter agent; the CLI has the same com
   screenshot.
 - **Model memory:** long OpenRouter sessions summarise older steps. Testers keep notes with `note`,
   and the harness re-injects the notes and the findings list every turn.
+- **Code coverage** is measured with coverage.py when the app interpreter has it (install
+  `coverage`); without it, coverage is off unless `--coverage on` selects a slower pure-Python
+  tracer. Coverage starts after DT is imported, so module-level lines are not counted: the
+  dataset reports coverage per function body.
+- **Model catalogue:** `auto`, `auto-vision` and `auto-budget[:N]` pick models from OpenRouter's
+  live list (tool calling, a large enough context, one per provider). Presets are a fallback and
+  can go stale; `jev models --pick auto:3` shows what would be chosen.
+- **Windows:** paths, long file names and console encoding are handled (output is UTF-8; the
+  offscreen screen config uses a relative path because drive letters break Qt's platform
+  string). The integration tests have run on Linux; please report anything Windows-specific.
 
 ## Development
 
@@ -192,9 +285,12 @@ python -m unittest discover -s tests -v    # the integration tests start the rea
 
 - **Main modules:**
   - `jev/host/` runs inside the app: `describe.py` makes snapshots, `actions.py` sends input,
-    `guards.py` holds the sandbox and file chooser, `server.py` is the control server, and
-    `monitor.py` and `observers.py` record events.
-  - `jev/tools.py` is the shared tool layer.
-  - `jev/agent/` contains the OpenRouter client, agent loop and matrix runner.
+    `guards.py` holds the sandbox and file chooser, `server.py` is the control server,
+    `monitor.py` and `observers.py` record events, and `coverage_probe.py` measures DT code.
+  - `jev/tools.py` is the shared tool layer and writes each run's `steps.jsonl`.
+  - `jev/agent/` contains the OpenRouter client, agent loop, matrix runner and model picker.
+  - `jev/scenarios.py` (scenarios, sweep, recording), `jev/crawler.py`, `jev/campaign.py`.
+  - `jev/dataset.py`, `jev/registry.py`, `jev/dtsource.py` (static index of DT's source),
+    `jev/verify.py` and `jev/triage.py` build and maintain the improvement dataset.
 - **Adapting to another PySide6 app:** most of the harness is generic Qt. The DT-specific parts
   are in `host/main.py`, `host/guards.py` (`install_dt_path_guards`) and `host/seed.py`.

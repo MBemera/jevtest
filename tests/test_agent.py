@@ -123,3 +123,29 @@ class AgentLoopTests(TempDirTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ModelPickTests(unittest.TestCase):
+    CATALOGUE = [
+        {"id": "anthropic/claude-new", "created": 300, "context_length": 200000, "supported_parameters": ["tools"],
+         "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
+         "pricing": {"prompt": "0.000003"}},
+        {"id": "anthropic/claude-old", "created": 100, "context_length": 200000, "supported_parameters": ["tools"],
+         "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}, "pricing": {"prompt": "0.000003"}},
+        {"id": "openai/gpt-mini", "created": 400, "context_length": 128000, "supported_parameters": ["tools"],
+         "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}, "pricing": {"prompt": "0.0000002"}},
+        {"id": "openai/gpt-big", "created": 350, "context_length": 128000, "supported_parameters": ["tools"],
+         "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}, "pricing": {"prompt": "0.000005"}},
+        {"id": "x-ai/no-tools", "created": 500, "context_length": 128000, "supported_parameters": [],
+         "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}, "pricing": {"prompt": "0.000001"}},
+        {"id": "google/free:free", "created": 600, "context_length": 128000, "supported_parameters": ["tools"],
+         "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}, "pricing": {"prompt": "0"}},
+    ]
+
+    def test_auto_picks_newest_capable_model_per_provider(self):
+        from jev.agent.models import parse_auto, pick_models
+        self.assertEqual(parse_auto("auto-vision:2"), (2, {"vision": True, "budget": False}))
+        self.assertIsNone(parse_auto("x-ai/grok"))
+        self.assertEqual(pick_models(self.CATALOGUE, 3), ["anthropic/claude-new", "openai/gpt-big"])
+        self.assertEqual(pick_models(self.CATALOGUE, 3, vision=True), ["anthropic/claude-new"])
+        self.assertEqual(pick_models(self.CATALOGUE, 3, budget=True), ["anthropic/claude-new", "openai/gpt-mini"])
