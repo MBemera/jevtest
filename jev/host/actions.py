@@ -111,23 +111,30 @@ class Actions:
         name = args.get("name") or ref
         wanted_roles = [args["role"]] if args.get("role") else roles
         if not name and wanted_roles:
-            return self.find_by_role(wanted_roles, int(args.get("index", 0)))
+            try:
+                return self.find_by_role(wanted_roles, int(args.get("index", 0)))
+            except LookupError as error:
+                raise ActionError(str(error)) from None
         if not name:
             raise ActionError("Give a target: ref (for example w12) or name (the visible label).")
         if str(name).strip().lower() in ("list", "tree", "tabs", "table", "canvas") and not args.get("role"):
             try:
-                return self.find_by_role([str(name).strip().lower()], int(args.get("index", 0)))
-            except ActionError:
+                return self.find_by_role([str(name).strip().lower()], int(args.get("index", 0)),
+                                         unique="index" not in args)
+            except LookupError:
                 pass
         return self.find_by_name(str(name), wanted_roles, int(args.get("index", 0)), args.get("window"))
 
-    def find_by_role(self, roles, index=0):
+    def find_by_role(self, roles, index=0, unique=False):
         matches = []
         for window in self.interactive_windows():
             labels = LabelIndex([window])
             matches.extend(node.widget for node in self.snapshotter.collect(window, labels) if node.role in roles)
         if not matches:
-            raise ActionError(f"No visible {'/'.join(roles)} to act on.")
+            raise LookupError(f"No visible {'/'.join(roles)} to act on.")
+        if unique and len(matches) > 1:
+            listed = "; ".join(self.describe(widget) for widget in matches[:6])
+            raise ActionError(f"{len(matches)} {'/'.join(roles)} widgets are visible ({listed}). Use a ref.")
         if index >= len(matches):
             raise ActionError(f"Only {len(matches)} visible {'/'.join(roles)} widget(s); index {index} is out of range.")
         return matches[index]
@@ -153,7 +160,12 @@ class Actions:
                     prefix.append(node.widget)
                 elif wanted in label:
                     contains.append(node.widget)
+        def preference(widget):
+            role = role_of(widget)
+            return 0 if role not in ("group", "dock", "tabs", "text", "document", "scroll area") else 1
+
         for group in (exact, prefix, contains):
+            group.sort(key=preference)
             if group:
                 if index >= len(group):
                     raise ActionError(f"Only {len(group)} match(es) for {name!r}; index {index} is out of range.")
@@ -633,46 +645,50 @@ class Actions:
         return {"did": f"drew {len(points)} stroke(s) on {self.describe(widget)}", "notes": notes}
 
     def do_scroll(self, args):
-        widget = self.resolve(args) if (args.get("ref") or args.get("name")) else None
-        area = widget
-        while area is not None and not (isinstance(area, QAbstractScrollArea) and not isinstance(area, QComboBox)):
-            area = area.parentWidget()
-        if area is None:
-            raise ActionError("Give a ref inside a scrollable area (a page, list or text box).")
-        self.check_reachable(area, need_enabled=False)
+        """Turn the mouse wheel with the pointer over the target, or drag a scroll bar to an end."""
+        widget = self.resolve(args)
+        self.check_reachable(widget, need_enabled=False)
         direction = (args.get("direction") or "down").lower()
-        amount = args.get("amount", 3)
         to = (args.get("to") or "").lower()
         horizontal = direction in ("left", "right")
-        bar = area.horizontalScrollBar() if horizontal else area.verticalScrollBar()
-        description = self.describe(area)
-        handle = self.refs.handle(area)
+        description = self.describe(widget)
         if to in ("top", "bottom", "start", "end"):
+            area = widget
+            while area is not None and not (isinstance(area, QAbstractScrollArea) and not isinstance(area, QComboBox)):
+                area = area.parentWidget()
+            if area is None:
+                raise ActionError(f"{description} is not inside a scrollable area.")
+            bar = area.horizontalScrollBar() if horizontal else area.verticalScrollBar()
             value = bar.minimum() if to in ("top", "start") else bar.maximum()
+            handle = self.refs.handle(area)
 
             def drag():
                 live = handle.get()
                 (live.horizontalScrollBar() if horizontal else live.verticalScrollBar()).setValue(value)
 
             self.scheduler.run([drag], f"scroll {description}")
-            return {"did": f"dragged the scroll bar of {description} to the {to}", "notes": []}
-        notches = max(1, min(int(amount), 50))
+            return {"did": f"dragged the scroll bar of {self.describe(area)} to the {to}", "notes": []}
+        notches = max(1, min(int(args.get("amount", 3) or 3), 50))
         sign = 1 if direction in ("up", "left") else -1
-        delta = QPoint(sign * 120, 0) if direction in ("left", "right") else QPoint(0, sign * 120)
+        delta = QPoint(sign * 120, 0) if horizontal else QPoint(0, sign * 120)
+        handle = self.refs.handle(widget)
 
         def wheel():
-            viewport = handle.get().viewport()
-            position = QPointF(viewport.rect().center())
-            global_position = QPointF(viewport.mapToGlobal(viewport.rect().center()))
-            receiver = viewport.childAt(position.toPoint()) or viewport
-            local = QPointF(receiver.mapFrom(viewport, position.toPoint()))
-            event = QWheelEvent(local, global_position, QPoint(0, 0), delta, Qt.MouseButton.NoButton,
-                                NO_MODIFIER, Qt.ScrollPhase.NoScrollPhase, False)
+            live = handle.get()
+            if live is None:
+                return
+            surface = live.viewport() if isinstance(live, QAbstractScrollArea) and not isinstance(live, QComboBox) else live
+            point = surface.rect().center()
+            receiver = surface.childAt(point) or surface
+            local = QPointF(receiver.mapFrom(surface, point))
+            event = QWheelEvent(local, QPointF(surface.mapToGlobal(point)), QPoint(0, 0), delta,
+                                Qt.MouseButton.NoButton, NO_MODIFIER, Qt.ScrollPhase.NoScrollPhase, False)
             QApplication.sendEvent(receiver, event)
 
         self.scheduler.run([wheel] * notches, f"scroll {description}")
-        return {"did": f"turned the mouse wheel {notches} notch(es) {direction} over the middle of {description}",
-                "notes": ["the wheel acts on whatever is under the pointer, as with a real mouse"]}
+        return {"did": f"turned the mouse wheel {notches} notch(es) {direction} with the pointer over {description}",
+                "notes": ["the wheel acts on whatever is under the pointer (a dropdown under the pointer changes "
+                          "value), and otherwise scrolls the page, as with a real mouse"]}
 
     def do_set_value(self, args):
         widget = self.resolve(args, roles=["slider", "spinbox"])

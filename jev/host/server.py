@@ -265,6 +265,8 @@ class Host:
     def cmd_read_text(self, args):
         def read():
             widget = self.actions.resolve(args)
+            if not widget.isVisible():
+                raise ActionError(f"{self.snapshotter.describe(widget)} is not visible on screen.")
             return {"target": self.snapshotter.describe(widget), "text": read_text(widget)}
 
         return self.gui(read)
@@ -272,6 +274,8 @@ class Host:
     def cmd_list_items(self, args):
         def items():
             widget = self.actions.resolve(args, roles=["list", "tree", "table", "combobox"])
+            if not widget.isVisible():
+                raise ActionError(f"{self.snapshotter.describe(widget)} is not visible on screen.")
             text = read_text(widget)
             lines = text.splitlines()
             offset = max(0, int(args.get("offset") or 0))

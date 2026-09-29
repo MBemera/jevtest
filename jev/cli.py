@@ -124,6 +124,13 @@ def cmd_stop(args):
         return 0
     session = AppSession.attach(root / "app")
     session.stop()
+    findings_file = root / "findings.jsonl"
+    if findings_file.exists():
+        from .findings import load_run_findings, render_markdown
+        findings = load_run_findings(findings_file)
+        report = render_markdown(findings, title=f"Jev QA session {args.name}", base_dir=root)
+        (root / "report.md").write_text(report, encoding="utf-8")
+        print(f"Report: {root / 'report.md'} ({len(findings)} finding(s))")
     print(f"Stopped session {args.name!r}. Findings, evidence and logs stay in {root}")
     return 0
 

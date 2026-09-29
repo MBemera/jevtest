@@ -64,7 +64,9 @@ jev stop
 ```
 
 Targets are refs from the latest snapshot (`w12`) or visible labels (`"Save preparation"`). Every
-action prints what happened, then a fresh snapshot.
+action prints what happened, then a fresh snapshot. `jev stop` writes the session's `report.md`.
+[docs/example-report.md](docs/example-report.md) shows the output from a short session that
+found four real DT issues.
 
 `jev start` options:
 
@@ -142,7 +144,7 @@ These tools are shared by MCP and the OpenRouter agent; the CLI has the same com
 | Tool | What it does |
 | --- | --- |
 | `snapshot` | windows, dialogs, controls with refs, values, states, status bar |
-| `click`, `type_text`, `select_option`, `set_checked`, `select_item`, `select_tab`, `press_key`, `draw`, `scroll`, `set_value`, `resize_window`, `close_window` | real input; the result includes what happened and a new snapshot |
+| `click`, `type_text`, `select_option`, `set_checked`, `select_item`, `select_tab`, `press_key`, `draw`, `scroll`, `set_value`, `resize_window`, `close_window` | real input; the result includes what happened and a new snapshot. `scroll` turns the wheel with the pointer over the target, so a dropdown under the pointer changes value, as it would for a person |
 | `wait` | let background jobs finish (`until=idle`) |
 | `screenshot` | PNG of the screen or one widget; `marks=true` labels refs |
 | `read_text`, `list_items` | full text of long labels, text areas, lists and dropdowns |
