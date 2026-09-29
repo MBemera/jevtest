@@ -42,6 +42,7 @@ def main(argv=None):
 
     import dt.ui
     from .guards import FileDialogPatch, NetworkGuard, install_dt_path_guards
+    from .coverage_probe import CoverageProbe
     from .seed import seed_vault, write_catalogue_fixtures
     from .server import Host
 
@@ -80,12 +81,16 @@ def main(argv=None):
             log.emit("app", phase="started", pid=os.getpid())
 
     dt.ui.QApplication = HarnessApplication
+    # Measure only what testers make DT do: seeding and imports ran before this point.
+    probe = CoverageProbe(session_dir, config.get("coverage", "auto"), log)
+    probe.start()
     code = 1
     try:
         code = dt.ui.main()
     finally:
         host.exited = code
         watchdog.stop()
+        probe.finish()
         log.emit("app", phase="exited", code=code)
         (session_dir / "exit.json").write_text(json.dumps({"code": code, "time": time.time()}), encoding="utf-8")
         time.sleep(0.4)  # let the control thread answer anyone still waiting

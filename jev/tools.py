@@ -203,6 +203,9 @@ class ToolRunner:
         self.max_snapshot_chars = max_snapshot_chars
         self.last_state = {}
         self.new_findings = []
+        self.trace_path = self.session_dir / "steps.jsonl"
+        self.snapshot_dir = self.session_dir / "snapshots"
+        self.last_target = None
 
     # ----- app lifecycle ----------------------------------------------------------------
     def ensure_app(self):
@@ -218,36 +221,50 @@ class ToolRunner:
 
     # ----- dispatch ---------------------------------------------------------------------
     def run(self, name, args):
+        """Run one tool and append a structured record of it to steps.jsonl."""
         self.step += 1
         self.new_findings = []
         args = dict(args or {})
+        started = time.monotonic()
+        screen_before = self.describe_screen()
+        result = self.dispatch(name, args)
+        try:
+            self.trace(name, args, result, started, screen_before)
+        except OSError:
+            pass
+        return result
+
+    def dispatch(self, name, args):
         try:
             if name in self.ACTIONS:
                 return self.action(self.ACTIONS[name], args)
             handler = getattr(self, "tool_" + name, None)
             if handler is None:
-                return ToolResult(f"Unknown tool {name!r}.", is_error=True)
+                return ToolResult(f"Unknown tool {name!r}.", is_error=True, data={"error_kind": "unknown_tool"})
             return handler(args)
         except AppCrashed as crash:
             return self.crashed(crash)
         except AppExited as exited:
-            return ToolResult(f"{exited} Call restart_app to continue testing.", is_error=True)
+            return ToolResult(f"{exited} Call restart_app to continue testing.", is_error=True,
+                              data={"error_kind": "exited"})
         except AppStartError as error:
-            return ToolResult(f"The app could not be started: {error}", is_error=True)
+            return ToolResult(f"The app could not be started: {error}", is_error=True, data={"error_kind": "start"})
         except HostError as error:
             if error.kind == "hang":
                 events = self.fetch_events()
                 found = self.record_auto(events)
                 lines = [self.format_events_block(events, str(error) + " Use restart_app to recover.")]
-                return ToolResult("\n".join(lines + self.finding_lines(found)), is_error=True)
-            return ToolResult(f"Could not do that: {error}", is_error=True)
+                return ToolResult("\n".join(lines + self.finding_lines(found)), is_error=True,
+                                  data={"error_kind": "hang", "events": events})
+            return ToolResult(f"Could not do that: {error}", is_error=True, data={"error_kind": error.kind})
         except Exception as error:  # noqa: BLE001 - a harness fault must not end the session
             import traceback
             detail = traceback.format_exc(limit=6)
             with (self.session_dir / "harness-errors.log").open("a", encoding="utf-8") as handle:
                 handle.write(detail + "\n")
             return ToolResult(f"Harness error ({type(error).__name__}: {error}). This is a problem in the test "
-                              "harness, not in DT; try another action or restart_app.", is_error=True)
+                              "harness, not in DT; try another action or restart_app.", is_error=True,
+                              data={"error_kind": "harness"})
 
     def action(self, action, args):
         session = self.ensure_app()
@@ -272,7 +289,10 @@ class ToolRunner:
         lines += self.finding_lines(found)
         if result.get("snapshot"):
             lines += ["", "Snapshot after the action:", self.clip(result["snapshot"])]
-        return ToolResult("\n".join(line for line in lines if line is not None))
+        return ToolResult("\n".join(line for line in lines if line is not None),
+                          data={"target": result.get("target"), "events": result.get("events", []),
+                                "snapshot": result.get("snapshot"), "notes": result.get("notes", []),
+                                "nodes": result.get("nodes", [])})
 
     def tool_snapshot(self, args):
         session = self.ensure_app()
@@ -285,7 +305,8 @@ class ToolRunner:
         meanwhile = [item for item in meanwhile if item]
         extra = (["", "Since the last action:"] + [f"  - {item}" for item in meanwhile[-15:]] if meanwhile else [])
         extra += self.finding_lines(found)
-        return ToolResult(text + ("\n" + "\n".join(extra) if extra else ""))
+        return ToolResult(text + ("\n" + "\n".join(extra) if extra else ""),
+                          data={"snapshot": result["text"], "events": events, "nodes": result.get("nodes", [])})
 
     def tool_screenshot(self, args):
         session = self.ensure_app()
@@ -307,10 +328,12 @@ class ToolRunner:
         lines += self.finding_lines(found)
         if result.get("snapshot"):
             lines += ["", self.clip(result["snapshot"])]
-        return ToolResult("\n".join(lines))
+        return ToolResult("\n".join(lines), data={"events": result.get("events", []),
+                                                  "snapshot": result.get("snapshot")})
 
     def tool_read_text(self, args):
-        result = self.ensure_app().call("read_text", {"ref": args.get("target")})
+        hints = {key: args[key] for key in ("role", "index", "tab_hint") if args.get(key) is not None}
+        result = self.ensure_app().call("read_text", {"ref": args.get("target"), **hints})
         return ToolResult(f"{result['target']}:\n{self.clip(result['text'], 12000)}")
 
     def tool_list_items(self, args):
@@ -422,6 +445,34 @@ class ToolRunner:
             text += f" It looks similar to {duplicate}; make sure it is a distinct problem."
         return ToolResult(text, data={"finding": stored})
 
+    # ----- trace -----------------------------------------------------------------------
+    def trace(self, name, args, result, started, screen_before):
+        data = result.data or {}
+        events = data.get("events") or []
+        if data.get("target") and not result.is_error:
+            self.last_target = {key: data["target"].get(key) for key in ("key", "role", "name", "window", "tab")}
+        record = {"step": self.step, "time": round(time.time(), 3), "tool": name, "args": trace_arguments(args),
+                  "ok": not result.is_error, "latency_ms": round((time.monotonic() - started) * 1000),
+                  "screen_before": screen_before, "screen_after": self.describe_screen(),
+                  "target": data.get("target"), "events": summarise_events(events),
+                  "findings": [finding["id"] for finding in self.new_findings]}
+        if result.is_error:
+            record["error"] = result.text.strip().splitlines()[0][:300] if result.text.strip() else ""
+            record["error_kind"] = data.get("error_kind", "")
+        if data.get("notes"):
+            record["notes"] = data["notes"][:5]
+        snapshot = data.get("snapshot")
+        if snapshot:
+            self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+            path = self.snapshot_dir / f"step{self.step:04d}.txt"
+            path.write_text(snapshot, encoding="utf-8")
+            record["snapshot"] = path.relative_to(self.session_dir).as_posix()
+        if data.get("nodes"):
+            record["controls"] = [node.get("key") for node in data["nodes"] if node.get("interactive", True)
+                                  and node.get("role") != "text"][:400]
+        with self.trace_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, default=str, ensure_ascii=False) + "\n")
+
     # ----- helpers ----------------------------------------------------------------------
     def fetch_events(self):
         if self.session is None or self.session.client is None:
@@ -443,8 +494,10 @@ class ToolRunner:
         return found
 
     def crashed(self, crash):
-        finding = {"source": "harness", "title": "The app crashed", "severity": "critical", "category": "crash",
-                   "signature": "crash@" + str(crash.details.get("exit_code")),
+        where = crash_location(crash.details.get("fault_log") or "")
+        finding = {"source": "harness", "title": "The app crashed" + (f" in {where}" if where else ""),
+                   "severity": "critical", "category": "crash",
+                   "signature": f"crash@{where or crash.details.get('exit_code')}",
                    "actual": str(crash), "step": self.step, "screen": self.describe_screen(),
                    "details": (crash.details.get("fault_log") or "") + "\n--- host log ---\n" +
                               (crash.details.get("log_tail") or "")}
@@ -452,7 +505,8 @@ class ToolRunner:
         self.new_findings.append(stored)
         return ToolResult(f"{crash}\nRecorded as {stored['id']} (critical). Note what you did just before this, "
                           "then call restart_app to continue.\n--- fault log ---\n" +
-                          (crash.details.get("fault_log") or "(empty)")[-3000:], is_error=True)
+                          (crash.details.get("fault_log") or "(empty)")[-3000:], is_error=True,
+                          data={"error_kind": "crash"})
 
     def track(self, state):
         if not state:
@@ -495,6 +549,11 @@ class ToolRunner:
             path = self.evidence_dir / f"{number}-snapshot.txt"
             path.write_text(snapshot["text"], encoding="utf-8")
             evidence["snapshot"] = str(path)
+            node = find_node(snapshot.get("nodes") or [], target)
+            if node:
+                evidence["target"] = {key: node.get(key) for key in ("key", "role", "name", "window", "tab")}
+            if self.last_target:
+                evidence["last_action_target"] = self.last_target
             events = self.session.call("events", {"since": max(0, self.session.last_seq - 25), "limit": 25})
             path = self.evidence_dir / f"{number}-events.json"
             path.write_text(json.dumps(events["events"], indent=1, default=str), encoding="utf-8")
@@ -527,6 +586,72 @@ class ToolRunner:
         if not lines:
             return f"{header} no dialogs, messages or errors." if header == "What happened:" else f"{header} none."
         return header + "\n" + "\n".join(lines)
+
+
+def crash_location(fault_log):
+    """The innermost DT frame of the crashing thread in a faulthandler dump, e.g. dt/ui.py:825."""
+    import re
+    section = fault_log.split("Current thread", 1)[-1]
+    for match in re.finditer(r'File "([^"]+)", line (\d+) in (\w+)', section):
+        path = match.group(1).replace("\\", "/")
+        if "/dt/" in path:
+            return f"dt/{path.rsplit('/dt/', 1)[1]}:{match.group(2)} in {match.group(3)}"
+    return ""
+
+
+def trace_arguments(args):
+    kept = {}
+    for key, value in args.items():
+        if key == "snapshot":
+            continue
+        if isinstance(value, str) and len(value) > 500:
+            value = value[:500] + f"... ({len(value)} characters)"
+        kept[key] = value
+    return kept
+
+
+def find_node(nodes, target):
+    """The snapshot node a tester's target (a ref or a visible label) refers to."""
+    if not target:
+        return None
+    wanted = str(target).strip().strip("[]")
+    for node in nodes:
+        if node.get("ref") == wanted:
+            return node
+    folded = wanted.casefold()
+    for node in nodes:
+        if (node.get("name") or "").casefold() == folded:
+            return node
+    return None
+
+
+def summarise_events(events):
+    """A compact, analysable digest of the events one step produced."""
+    summary = {"counts": {}}
+    for event in events:
+        kind = event.get("kind", "")
+        summary["counts"][kind] = summary["counts"].get(kind, 0) + 1
+        if kind == "dialog" and event.get("phase") == "opened":
+            item = {"title": event.get("title", ""), "class": event.get("class", "")}
+            if event.get("message"):
+                item["message"] = str(event["message"])[:300]
+                item["icon"] = event.get("icon")
+            summary.setdefault("dialogs", []).append(item)
+        elif kind == "status":
+            summary.setdefault("status", []).append(str(event.get("message", ""))[:200])
+        elif kind == "exception":
+            summary.setdefault("exceptions", []).append(event.get("signature"))
+        elif kind == "network":
+            summary.setdefault("network", []).append(f"{event.get('decision')} {event.get('method')} {event.get('host')}")
+        elif kind == "stall":
+            summary.setdefault("stalls", []).append(event.get("seconds"))
+        elif kind == "sandbox":
+            summary.setdefault("sandbox", []).append(f"{event.get('decision')} {event.get('what')}")
+        elif kind == "suspicious_text":
+            summary.setdefault("suspicious_text", []).append(str(event.get("text", ""))[:200])
+    if "status" in summary:
+        summary["status"] = summary["status"][-4:]
+    return summary
 
 
 def format_event(event, verbose=False):

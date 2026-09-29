@@ -6,6 +6,7 @@ event loop rather than run inline, so an action that opens a modal dialog (which
 a nested event loop) does not block the harness.
 """
 
+import re
 import traceback
 
 import shiboken6
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QTabWidget, QTextEdit, QTreeWidget, QWidget,
 )
 
-from .describe import LabelIndex, clean, name_of, role_of
+from .describe import LabelIndex, clean, containing_tab, iterate_tree, name_of, role_of
 
 LEFT = Qt.MouseButton.LeftButton
 NO_MODIFIER = Qt.KeyboardModifier.NoModifier
@@ -88,6 +89,7 @@ def normalise(text):
 
 class Actions:
     def __init__(self, refs, snapshotter, scheduler, log):
+        self.last_target = None
         self.refs = refs
         self.snapshotter = snapshotter
         self.scheduler = scheduler
@@ -102,17 +104,21 @@ class Actions:
         return windows
 
     def resolve(self, args, roles=None):
+        return self.remember(self.resolve_widget(args, roles))
+
+    def resolve_widget(self, args, roles=None):
         ref = args.get("ref") or args.get("target")
-        if ref and str(ref).strip().lstrip("[").startswith("w") and str(ref).strip().lstrip("[").rstrip("]")[1:].isdigit():
+        if is_ref(ref):
             widget = self.refs.find(ref)
             if widget is None:
                 raise ActionError(f"No widget with reference {ref} exists any more. Take a new snapshot.")
             return widget
         name = args.get("name") or ref
         wanted_roles = [args["role"]] if args.get("role") else roles
+        tab_hint = args.get("tab_hint")
         if not name and wanted_roles:
             try:
-                return self.find_by_role(wanted_roles, int(args.get("index", 0)))
+                return self.find_by_role(wanted_roles, int(args.get("index", 0)), tab_hint=tab_hint)
             except LookupError as error:
                 raise ActionError(str(error)) from None
         if not name:
@@ -123,13 +129,14 @@ class Actions:
                                          unique="index" not in args)
             except LookupError:
                 pass
-        return self.find_by_name(str(name), wanted_roles, int(args.get("index", 0)), args.get("window"))
+        return self.find_by_name(str(name), wanted_roles, int(args.get("index", 0)), args.get("window"), tab_hint)
 
-    def find_by_role(self, roles, index=0, unique=False):
+    def find_by_role(self, roles, index=0, unique=False, tab_hint=None):
         matches = []
         for window in self.interactive_windows():
             labels = LabelIndex([window])
-            matches.extend(node.widget for node in self.snapshotter.collect(window, labels) if node.role in roles)
+            matches.extend(node.widget for node in self.snapshotter.collect(window, labels) if node.role in roles
+                           and (tab_hint is None or normalise(containing_tab(node.widget)) == normalise(tab_hint)))
         if not matches:
             raise LookupError(f"No visible {'/'.join(roles)} to act on.")
         if unique and len(matches) > 1:
@@ -139,7 +146,7 @@ class Actions:
             raise ActionError(f"Only {len(matches)} visible {'/'.join(roles)} widget(s); index {index} is out of range.")
         return matches[index]
 
-    def find_by_name(self, name, roles, index, window_hint=None):
+    def find_by_name(self, name, roles, index, window_hint=None, tab_hint=None):
         wanted = normalise(name)
         windows = self.interactive_windows()
         if window_hint:
@@ -150,6 +157,8 @@ class Actions:
             nodes = self.snapshotter.collect(window, labels)
             for node in nodes:
                 if roles and node.role not in roles:
+                    continue
+                if tab_hint is not None and normalise(containing_tab(node.widget)) != normalise(tab_hint):
                     continue
                 label = normalise(node.name if node.role != "text" else node.widget.text())
                 if not label:
@@ -240,7 +249,16 @@ class Actions:
         handler = getattr(self, "do_" + name, None)
         if handler is None:
             raise ActionError(f"Unknown action {name!r}")
-        return handler(args)
+        self.last_target = None
+        outcome = handler(args)
+        target = self.last_target
+        if target is not None and shiboken6.isValid(target):
+            outcome["target"] = self.snapshotter.target_info(target)
+        return outcome
+
+    def remember(self, widget):
+        self.last_target = widget
+        return widget
 
     def do_click(self, args):
         widget = self.resolve(args)
@@ -415,7 +433,16 @@ class Actions:
         return {"did": f"clicked {self.describe(widget)} to {'check' if wanted else 'uncheck'} it", "notes": notes}
 
     def do_select_item(self, args):
-        widget = self.resolve(args, roles=["list", "tree", "table"])
+        named = args.get("ref") or args.get("target") or args.get("name")
+        if not named and args.get("item") is not None and not args.get("role"):
+            widget = self.remember(self.list_showing(args["item"], args.get("tab_hint")))
+        else:
+            try:
+                widget = self.resolve(args, roles=["list", "tree", "table"])
+            except ActionError:
+                if args.get("item") is None or is_ref(named):
+                    raise
+                widget = self.remember(self.list_showing(args["item"], args.get("tab_hint")))
         if isinstance(widget, QTreeWidget):
             return self.select_tree_item(widget, args)
         if not isinstance(widget, QAbstractItemView):
@@ -462,6 +489,27 @@ class Actions:
                 steps.append(lambda: QTest.keyClick(handle.get().viewport(), Qt.Key.Key_Space))
         self.scheduler.run(steps, f"{mode} row {row} in {description}")
         return {"did": f"{mode} row {row} {label!r} in {description}", "notes": notes}
+
+    def list_showing(self, item, tab_hint=None):
+        """The visible list or tree with a row matching the text, as a person would look for it."""
+        wanted = normalise(item)
+        fallback = None
+        for window in self.interactive_windows():
+            labels = LabelIndex([window])
+            for node in self.snapshotter.collect(window, labels):
+                if node.role not in ("list", "tree", "table"):
+                    continue
+                if tab_hint is not None and normalise(containing_tab(node.widget)) != normalise(tab_hint):
+                    continue
+                for text in visible_rows(node.widget):
+                    label = normalise(text)
+                    if label == wanted or label.startswith(wanted):
+                        return node.widget
+                    if wanted in label and fallback is None:
+                        fallback = node.widget
+        if fallback is not None:
+            return fallback
+        raise ActionError(f"No visible list has a row matching {item!r}. Take a snapshot and use a ref.")
 
     @staticmethod
     def find_row(view, item, rows):
@@ -518,6 +566,12 @@ class Actions:
 
     @staticmethod
     def find_tree_item(tree, wanted):
+        if wanted.strip().isdigit():
+            items = list(iterate_tree(tree))
+            index = int(wanted)
+            if not 0 <= index < len(items):
+                raise ActionError(f"Tree row {index} is out of range (0..{len(items) - 1}).")
+            return items[index]
         parts = [normalise(part) for part in wanted.replace(">", "/").split("/") if part.strip()]
         items = []
 
@@ -541,7 +595,8 @@ class Actions:
         tab = args.get("tab")
         if tab is None:
             raise ActionError("Give the tab: its label or its index.")
-        widget = self.resolve(args, roles=["tabs"]) if (args.get("ref") or args.get("name")) else self.find_tab_widget(tab)
+        widget = self.resolve(args, roles=["tabs"]) if (args.get("ref") or args.get("name")) else \
+            self.remember(self.find_tab_widget(tab))
         if not isinstance(widget, QTabWidget):
             raise ActionError(f"{self.describe(widget)} is not a set of tabs.")
         self.check_reachable(widget, need_enabled=True)
@@ -608,6 +663,7 @@ class Actions:
             if modal is not None and target.window() is not modal and not modal.isAncestorOf(target.window()):
                 target = modal.focusWidget() or modal
         combos = [sequence[index] for index in range(sequence.count())]
+        self.remember(target)
         description = self.describe(target)
         self.activate(target)
         handle = self.refs.handle(target)
@@ -722,6 +778,7 @@ class Actions:
         modal = QApplication.activeModalWidget()
         if modal is not None and window is not modal and not modal.isAncestorOf(window):
             raise ActionError(f"The modal dialog {modal.windowTitle()!r} must be closed first.")
+        self.remember(window)
         description = self.describe(window)
         handle = self.refs.handle(window)
         self.scheduler.run([lambda: handle.get().close() if handle.get() is not None else None], f"close {description}")
@@ -736,6 +793,7 @@ class Actions:
             window = windows[0] if windows else None
         if window is None:
             raise ActionError("No main window to resize yet.")
+        self.remember(window)
         screen = QApplication.primaryScreen().availableGeometry()
         width = max(1, min(int(args.get("width", window.width())), screen.width()))
         height = max(1, min(int(args.get("height", window.height())), screen.height()))
@@ -748,6 +806,21 @@ class Actions:
         if width < minimum.width() or height < minimum.height():
             notes.append(f"the window's minimum size is {minimum.width()}x{minimum.height()}")
         return {"did": f"resized {self.describe(window)} to {width}x{height}", "notes": notes}
+
+
+def is_ref(value):
+    return bool(value) and bool(re.fullmatch(r"\[?w\d+\]?", str(value).strip()))
+
+
+def visible_rows(view):
+    if isinstance(view, QTreeWidget):
+        return [view_item.text(0) for view_item in iterate_tree(view)]
+    model = view.model()
+    if model is None:
+        return []
+    rows = model.rowCount(view.rootIndex())
+    return [str(model.index(row, 0, view.rootIndex()).data(Qt.ItemDataRole.DisplayRole) or "") for row in range(rows)
+            if not (isinstance(view, QListView) and view.isRowHidden(row))]
 
 
 def type_characters(widget, text):

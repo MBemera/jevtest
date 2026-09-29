@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from .client import HostClient, HostConnectionLost, HostError
-from .config import REPO_DIR, dt_path, host_python, real_ffmpeg_tools
+from .config import REPO_DIR, dt_path, dt_version, host_python, real_ffmpeg_tools
 from .fixtures import describe_fixtures, install_fixtures
 
 SEED_PASSPHRASE = "jev-synthetic-passphrase-2026"
@@ -21,7 +21,7 @@ KEEP_ENV = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_AL
             "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"}
 DEFAULTS = {"screen": "1366x768", "network": "block", "allow_hosts": [], "ffmpeg": "auto", "seed": "none",
             "idle_timeout_ms": None, "visible": False, "stall_seconds": 1.5, "settle": 0.35, "wait_busy": 10.0,
-            "isolate_home": True, "unlock": True}
+            "isolate_home": True, "unlock": True, "coverage": "auto"}
 
 
 class AppCrashed(Exception):
@@ -80,6 +80,7 @@ class AppSession:
             "seed": self.options["seed"],
             "seed_folder": str(self.sandbox / "vaults" / "seeded-vault"),
             "exit_on_stdin_eof": self.owned,
+            "coverage": self.options.get("coverage", "auto"),
         }
         (self.session_dir / "host-config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
@@ -160,9 +161,11 @@ class AppSession:
         return self.ready
 
     def write_state(self):
+        from . import __version__
         state = {"session_dir": str(self.session_dir), "pid": self.process.pid if self.process else None,
                  "port": self.ready["port"] if self.ready else None,
-                 "token": self.ready["token"] if self.ready else None, "options": self.options}
+                 "token": self.ready["token"] if self.ready else None, "options": self.options,
+                 "dt": dt_version(), "jev": __version__, "started": time.time()}
         (self.session_dir / "session.json").write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
 
     @classmethod
@@ -302,6 +305,7 @@ class AppSession:
                       if self.options["ffmpeg"] != "none" else "hidden from DT on purpose",
             "screen": self.options["screen"],
             "idle_lock_after_ms": self.options.get("idle_timeout_ms") or 300000,
+            "dt_commit": (dt_version().get("commit") or "unknown")[:12],
         }
 
     def log_tail(self, lines=40):

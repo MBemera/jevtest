@@ -1,0 +1,235 @@
+{
+  "name": "09-ai-report",
+  "title": "Optional AI report drafting against a mocked provider: approval, privacy, failures and applying a draft",
+  "features": [
+    "report-ai-setup",
+    "report-ai-preview",
+    "report-ai-apply",
+    "report-ai-errors",
+    "report-ai-cancel",
+    "network-approval"
+  ],
+  "app": {
+    "seed": "sample",
+    "network": "mock"
+  },
+  "steps": [
+    {
+      "do": "select_item",
+      "item": "Sam Synthetic"
+    },
+    {
+      "do": "select_tab",
+      "tab": "4 Finalise"
+    },
+    {
+      "do": "click",
+      "target": "Report AI setup (optional)",
+      "expect": {
+        "dialog": "Report AI setup"
+      }
+    },
+    {
+      "do": "select_option",
+      "target": "Provider",
+      "option": "OpenRouter"
+    },
+    {
+      "do": "type_text",
+      "target": "Model",
+      "text": "bad model id with spaces"
+    },
+    {
+      "do": "type_text",
+      "target": "API key / Copilot access token",
+      "text": "sk-or-v1-synthetic"
+    },
+    {
+      "do": "click",
+      "target": "Save",
+      "expect": {
+        "network": "none"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Draft report with AI",
+      "expect": {
+        "message": "model ID"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK"
+    },
+    {
+      "do": "click",
+      "target": "Report AI setup (optional)"
+    },
+    {
+      "do": "type_text",
+      "target": "Model",
+      "text": "x-ai/grok-4.7"
+    },
+    {
+      "do": "click",
+      "target": "Save"
+    },
+    {
+      "do": "click",
+      "target": "Draft report with AI",
+      "expect": {
+        "dialog": "Approve report request",
+        "network": "none"
+      }
+    },
+    {
+      "do": "expect",
+      "lacks": "Sam Synthetic"
+    },
+    {
+      "do": "set_checked",
+      "target": "Include my recorded observations",
+      "checked": true
+    },
+    {
+      "do": "set_checked",
+      "target": "Include my recorded observations",
+      "checked": false
+    },
+    {
+      "do": "click",
+      "target": "Send approved text",
+      "expect": {
+        "network": "openrouter.ai",
+        "dialog": "Review AI report draft"
+      }
+    },
+    {
+      "do": "network_log",
+      "count": 1
+    },
+    {
+      "do": "click",
+      "target": "Use reviewed draft"
+    },
+    {
+      "do": "expect",
+      "value": {
+        "target": "Optional report narrative",
+        "contains": "Jev mock draft"
+      }
+    },
+    {
+      "do": "set_network_mock",
+      "scenario": "http_429",
+      "service": "ai"
+    },
+    {
+      "do": "click",
+      "target": "Draft report with AI"
+    },
+    {
+      "do": "click",
+      "target": "Send approved text",
+      "expect": {
+        "status": "HTTP 429"
+      }
+    },
+    {
+      "do": "set_network_mock",
+      "scenario": "unfinished",
+      "service": "ai"
+    },
+    {
+      "do": "click",
+      "target": "Draft report with AI"
+    },
+    {
+      "do": "click",
+      "target": "Send approved text",
+      "expect": {
+        "status": "did not finish"
+      }
+    },
+    {
+      "do": "set_network_mock",
+      "scenario": "long_draft",
+      "service": "ai"
+    },
+    {
+      "do": "click",
+      "target": "Draft report with AI"
+    },
+    {
+      "do": "click",
+      "target": "Send approved text",
+      "expect": {
+        "status": "oversized"
+      }
+    },
+    {
+      "do": "set_network_mock",
+      "scenario": "injection",
+      "service": "ai"
+    },
+    {
+      "do": "click",
+      "target": "Draft report with AI"
+    },
+    {
+      "do": "click",
+      "target": "Send approved text",
+      "expect": {
+        "dialog": "Review AI report draft"
+      }
+    },
+    {
+      "do": "screenshot",
+      "note": "injected draft shown as plain text"
+    },
+    {
+      "do": "click",
+      "target": "Cancel",
+      "window": "Review AI report draft"
+    },
+    {
+      "do": "set_network_mock",
+      "scenario": "slow",
+      "service": "ai",
+      "delay": 8
+    },
+    {
+      "do": "click",
+      "target": "Draft report with AI"
+    },
+    {
+      "do": "click",
+      "target": "Send approved text",
+      "wait_busy": 0
+    },
+    {
+      "do": "click",
+      "target": "Cancel report request",
+      "wait_busy": 5,
+      "expect": {
+        "status": "cancelled"
+      },
+      "on_fail": {
+        "issue": "JEV-0003",
+        "title": "Cancel report request does nothing while an AI draft is being requested",
+        "severity": "high",
+        "category": "functional",
+        "key": "cancel-report",
+        "expected": "Cancel report request stops waiting and the status bar says the request was cancelled (README: 'Cancel report request stops waiting').",
+        "actual_prefix": "The button is wired through MainWindow.run_action, which returns early while a worker is busy, so the click is ignored: "
+      },
+      "soft": true
+    },
+    {
+      "do": "click",
+      "target": "Cancel",
+      "optional": true
+    }
+  ]
+}

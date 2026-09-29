@@ -276,6 +276,10 @@ def name_of(widget, labels, role=None, strict=False):
     name = widget.objectName()
     if name and not name.startswith("qt_"):
         return name
+    if role == "tree" and isinstance(widget, QTreeWidget) and not widget.isHeaderHidden():
+        header = clean(widget.headerItem().text(0)) if widget.headerItem() is not None else ""
+        if header:
+            return header
     if not strict and role in INPUT_ROLES:
         parent = widget.parentWidget()
         while parent is not None and not parent.isWindow():
@@ -622,7 +626,9 @@ class Snapshotter:
                 lines.append(f"{key}: {value}")
         lines.append("")
         for window in windows:
-            nodes.extend(self.render_window(window, labels, modal=modal, full=full, lines=lines))
+            blocked = modal is not None and window is not modal and not modal.isAncestorOf(window)
+            nodes.extend((node, blocked) for node in self.render_window(window, labels, modal=modal, full=full,
+                                                                        lines=lines))
             lines.append("")
         popup = QApplication.activePopupWidget()
         if popup is not None:
@@ -635,9 +641,54 @@ class Snapshotter:
         if focus is not None:
             lines.append(f"Keyboard focus: [{self.refs.of(focus)}] {role_of(focus)} "
                          f"{quoted(name_of(focus, labels), 80)}")
-        summary = [{"ref": node.ref, "role": node.role, "name": node.name, "depth": node.depth,
-                    "enabled": node.widget.isEnabled()} for node in nodes]
+        summary = [self.record(node, blocked) for node, blocked in nodes]
         return "\n".join(lines).rstrip() + "\n", summary
+
+    def record(self, node, blocked=False):
+        """Structured description of one visible control, for crawlers and coverage datasets."""
+        widget, role = node.widget, node.role
+        window = widget.window()
+        value, count, editable, readonly, options = "", None, False, False, None
+        if role == "textbox":
+            value = "(hidden)" if widget.echoMode() != QLineEdit.EchoMode.Normal else widget.text()[:200]
+            readonly = widget.isReadOnly()
+        elif role in ("textarea", "document"):
+            value = widget.toPlainText()[:200]
+            readonly = widget.isReadOnly()
+        elif role in ("checkbox", "radio"):
+            value = widget.isChecked()
+        elif role == "combobox":
+            value, count, editable = widget.currentText()[:200], widget.count(), widget.isEditable()
+        elif role == "tabs":
+            value, count = clean(widget.tabText(widget.currentIndex())), widget.count()
+            options = [clean(widget.tabText(index)) for index in range(widget.count()) if widget.isTabEnabled(index)]
+        elif role == "tree" and isinstance(widget, QTreeWidget):
+            count = sum(1 for _ in iterate_tree(widget))
+        elif role in ("list", "table") and widget.model() is not None:
+            rows = widget.model().rowCount(widget.rootIndex())
+            count = sum(1 for row in range(rows) if not (isinstance(widget, QListView) and widget.isRowHidden(row)))
+        elif role == "text":
+            value = widget.text()[:300]
+        elif role == "slider":
+            value = widget.value()
+        tab = containing_tab(widget)
+        return {"ref": node.ref or self.refs.of(widget), "role": role, "name": node.name, "depth": node.depth,
+                "enabled": widget.isEnabled(), "window": clean(window.windowTitle()), "window_role": role_of(window),
+                "tab": tab, "group": containing_group(widget), "interactive": not blocked,
+                "in_view": not widget.visibleRegion().isEmpty(), "value": value, "count": count,
+                "editable": editable, "readonly": readonly, "options": options,
+                "key": control_key(window.windowTitle(), tab, role, node.name)}
+
+    def target_info(self, widget):
+        """Where an action landed, in stable terms (window, tab, role, name) rather than a ref."""
+        window = widget.window()
+        labels = LabelIndex([window])
+        role = role_of(widget)
+        name = name_of(widget, labels, role)
+        tab = containing_tab(widget)
+        return {"ref": self.refs.of(widget), "role": role, "name": name, "window": clean(window.windowTitle()),
+                "window_role": role_of(window), "tab": tab, "group": containing_group(widget),
+                "key": control_key(window.windowTitle(), tab, role, name)}
 
     def describe(self, widget, labels=None):
         """One line naming a widget, for action results and errors."""
@@ -648,6 +699,42 @@ class Snapshotter:
         if role == "text":
             return text + " " + quoted(widget.text(), 80)
         return text + (" " + quoted(name, 80) if name else "")
+
+
+def containing_tab(widget):
+    """Label of the tab page that contains the widget, if any."""
+    child, parent = widget, widget.parentWidget()
+    while parent is not None and not child.isWindow():
+        if isinstance(parent, QTabWidget):
+            index = parent.indexOf(child)
+            return clean(parent.tabText(index if index >= 0 else parent.currentIndex()))
+        child, parent = parent, parent.parentWidget()
+    return ""
+
+
+def containing_group(widget):
+    parent = widget.parentWidget()
+    while parent is not None and not parent.isWindow():
+        if isinstance(parent, QGroupBox) and clean(parent.title()):
+            return clean(parent.title())
+        parent = parent.parentWidget()
+    return ""
+
+
+def control_key(window_title, tab, role, name):
+    """Stable identity of a control across runs: window | tab | role | name."""
+    title = clean(window_title)
+    if title.endswith("— file chooser"):
+        title = "file chooser"
+    return " | ".join([title, clean(tab), role, clean(name)])
+
+
+def iterate_tree(tree):
+    stack = [tree.topLevelItem(index) for index in range(tree.topLevelItemCount())]
+    while stack:
+        item = stack.pop()
+        yield item
+        stack.extend(item.child(index) for index in range(item.childCount()))
 
 
 def scroll_state(vertical, horizontal):

@@ -107,7 +107,12 @@ def install_fixtures(target):
             continue
         destination = target / item.name
         if not destination.exists():
-            shutil.copyfile(item, destination)
+            try:
+                shutil.copyfile(item, destination)
+            except OSError:
+                # A very long sandbox path can exceed Windows' 260-character limit for the
+                # long-name fixture; the other fixtures are still useful without it.
+                continue
     return sorted(path.name for path in target.iterdir())
 
 

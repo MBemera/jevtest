@@ -74,13 +74,15 @@ def attached_runner(name, auto_start=True):
     runner.session = session
     state = root / "cli-state.json"
     if state.exists():
-        session.last_seq = json.loads(state.read_text(encoding="utf-8")).get("last_seq", 0)
+        saved = json.loads(state.read_text(encoding="utf-8"))
+        session.last_seq = saved.get("last_seq", 0)
+        runner.step = saved.get("step", 0)
     return runner, state
 
 
 def save_state(runner, state):
     if runner.session is not None:
-        state.write_text(json.dumps({"last_seq": runner.session.last_seq}), encoding="utf-8")
+        state.write_text(json.dumps({"last_seq": runner.session.last_seq, "step": runner.step}), encoding="utf-8")
 
 
 def run_tool(args, name, arguments, image_out=None):
@@ -224,6 +226,11 @@ def cmd_models(args):
         rows.append((model["id"], model.get("context_length") or 0, "tools" in parameters, "image" in modalities,
                      float(pricing.get("prompt") or 0) * 1e6, float(pricing.get("completion") or 0) * 1e6))
     rows.sort(key=lambda row: row[0])
+    if args.pick:
+        from .agent.models import parse_auto, pick_models
+        count, filters = parse_auto(args.pick) or (3, {})
+        print("\n".join(pick_models(models, count, **filters)))
+        return 0
     print(f"{'model':55} {'context':>9} tools vision  $/M in  $/M out")
     for row in rows:
         print(f"{row[0]:55} {row[1]:>9} {'yes' if row[2] else 'no':>5} {'yes' if row[3] else 'no':>6} "
@@ -250,14 +257,25 @@ def default_models():
 
 
 def resolve_models(text):
+    """Model IDs from a comma list of IDs, preset names, or auto[-vision|-budget][:N]."""
+    from .agent.models import parse_auto, pick_models
     presets = json.loads((Path(__file__).parent / "data" / "model_presets.json").read_text(encoding="utf-8"))["presets"]
     models = []
     for item in (text or "").split(","):
         item = item.strip()
         if not item:
             continue
-        models.extend(presets.get(item.removeprefix("preset:"), [item]) if item.startswith("preset:") or item in presets else [item])
-    return models or default_models()
+        auto = parse_auto(item)
+        if auto is not None:
+            from .agent.openrouter import OpenRouter
+            count, filters = auto
+            picked = pick_models(OpenRouter().models(), count, **filters)
+            print(f"auto-selected models: {', '.join(picked) or 'none'}", file=sys.stderr)
+            models.extend(picked)
+            continue
+        name = item.removeprefix("preset:")
+        models.extend(presets[name] if name in presets else [item])
+    return list(dict.fromkeys(models)) or default_models()
 
 
 def cmd_run(args):
@@ -313,6 +331,196 @@ def cmd_list(kind):
                 print(f"{'':26} {options}")
         return 0
     return command
+
+
+def cmd_scenario(args):
+    from .scenarios import find_scenarios, load_scenario, record_scenario, run_scenario
+    if args.action == "list":
+        for path in find_scenarios():
+            scenario = load_scenario(path)
+            print(f"{path.parent.name + '/' + path.stem:40} {scenario.get('title', '')}")
+        return 0
+    if args.action == "record":
+        scenario = record_scenario(args.target, until_step=args.until, name=args.name)
+        text = json.dumps(scenario, indent=2, ensure_ascii=False)
+        if args.out:
+            Path(args.out).write_text(text + "\n", encoding="utf-8")
+            print(f"Wrote {args.out} ({len(scenario['steps'])} steps)")
+        else:
+            print(text)
+        return 0
+    scenario = load_scenario(args.target)
+    out = Path(args.out) if args.out else runs_dir() / f"scenario-{time.strftime('%Y%m%d-%H%M%S')}-{scenario['name']}"
+    result = run_scenario(scenario, out, app_overrides=app_options(args))
+    print(f"\n{scenario['name']}: {'PASSED' if result.passed else 'FAILED'} in {result.duration}s -> {out}")
+    return 0 if result.passed else 1
+
+
+def cmd_sweep(args):
+    from .scenarios import find_scenarios, run_suite
+    scenarios = find_scenarios("sweep")
+    if args.only:
+        wanted = [item.strip() for item in args.only.split(",") if item.strip()]
+        scenarios = [path for path in scenarios if any(item in path.stem for item in wanted)]
+    out = Path(args.out) if args.out else runs_dir() / f"sweep-{time.strftime('%Y%m%d-%H%M%S')}"
+    results = run_suite(scenarios, out, app_overrides=app_options(args), quiet=args.quiet)
+    passed = sum(1 for result in results if result.passed)
+    print(f"\nSweep: {passed}/{len(results)} scenarios passed. Summary: {out / 'summary.md'}")
+    return 0 if passed == len(results) else 1
+
+
+def cmd_crawl(args):
+    from .crawler import Crawler
+    out = Path(args.out) if args.out else runs_dir() / f"crawl-{time.strftime('%Y%m%d-%H%M%S')}-r{args.random_seed}"
+    summary = Crawler(out, steps=args.steps, seed=args.random_seed, app_options=app_options(args), quiet=args.quiet,
+                      max_minutes=args.max_minutes).run()
+    print(json.dumps({key: value for key, value in summary.items() if key not in ("never_used", "windows")}, indent=1))
+    for window, counts in summary.get("windows", {}).items():
+        print(f"  {counts['used']:>3}/{counts['seen']:<3} controls used in {window}")
+    print(f"Crawl folder: {out}")
+    return 0
+
+
+def cmd_dataset(args):
+    from .dataset import build
+    from .registry import dataset_dir
+    out = Path(args.out) if args.out else dataset_dir()
+    if args.action == "build":
+        roots = [Path(path) for path in args.runs] if args.runs else None
+        summary = build(out_dir=out, roots=roots, handoff=not args.no_handoff, quiet=args.quiet)
+    else:
+        summary = json.loads((out / "dataset.json").read_text(encoding="utf-8")) if (out / "dataset.json").exists() \
+            else None
+        if summary is None:
+            print(f"No dataset in {out}; run: jev dataset build")
+            return 1
+    code, ui, issues = summary["code"], summary["ui"], summary["issues"]
+    print(f"Runs: {summary['runs']['total']} {summary['runs']['by_kind']}; steps {summary['steps']}; "
+          f"findings {summary['findings']}; model cost ${summary['runs']['cost']:.4f}")
+    print(f"Issues: {issues['active']} open or regressed of {issues['total']} {issues['by_status']}")
+    print(f"DT code exercised: {code['percent']}% of statements, {code['functions_run']}/{code['functions']} functions")
+    print(f"UI: {ui['controls']} controls seen, {ui['used']} used, {ui['unlabelled']} unlabelled, "
+          f"{ui['labels_never_seen']} labels never shown")
+    backlog = out / "improvements.jsonl"
+    if backlog.exists():
+        print("\nTop of the backlog:")
+        for line in backlog.read_text(encoding="utf-8").splitlines()[:args.top]:
+            item = json.loads(line)
+            print(f"  {item['rank']:>3}. [{item['severity']}] {item['id']} {item['title'][:100]}")
+    for note in summary.get("notes", []):
+        print(f"Note: {note}")
+    print(f"\nDataset: {out}\nBacklog: {out / 'improvements.md'}\nHandoff for DT: {out / 'handoff' / 'README.md'}")
+    return 0
+
+
+def cmd_issues(args):
+    from .registry import ACTIVE, Registry, dataset_dir
+    out = Path(args.dataset) if args.dataset else dataset_dir()
+    registry = Registry(out / "registry.json")
+    extra = {}
+    if (out / "issues.jsonl").exists():
+        for line in (out / "issues.jsonl").read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                extra[row["id"]] = row
+    if args.action == "list":
+        rows = []
+        wanted = args.status or "active"
+        for issue in registry.issues.values():
+            if wanted == "active" and issue.get("status") not in ACTIVE:
+                continue
+            if wanted not in ("active", "all") and issue.get("status") != wanted:
+                continue
+            rows.append(dict(issue, **{key: extra.get(issue["id"], {}).get(key) for key in ("score", "occurrences", "runs")}))
+        rows.sort(key=lambda row: -(row.get("score") or 0))
+        if args.json:
+            print(json.dumps(rows, indent=2, default=str))
+            return 0
+        for row in rows:
+            print(f"{row['id']}  {row.get('status', ''):<10} {row.get('severity', ''):<8} score {row.get('score') or '-':<6} "
+                  f"{row.get('title', '')[:100]}")
+        print(f"{len(rows)} issue(s) in {registry.path}")
+        return 0
+    issue = registry.get(args.id or "")
+    if issue is None:
+        print(f"No issue {args.id!r} in {registry.path}")
+        return 1
+    if args.action == "set":
+        changed = []
+        for key in ("classification", "severity", "title"):
+            if getattr(args, key):
+                issue[key] = getattr(args, key)
+                changed.append(key)
+        if args.duplicate_of:
+            issue["duplicate_of"] = args.duplicate_of.upper()
+            registry.set_status(issue["id"], "duplicate", by="user", note=args.note or f"Duplicate of {args.duplicate_of}")
+        elif args.status:
+            registry.set_status(issue["id"], args.status, by="user", note=args.note or "")
+        elif args.note:
+            issue.setdefault("notes", []).append({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "note": args.note})
+        registry.save()
+        print(f"{issue['id']} is now {issue['status']}" + (f"; updated {', '.join(changed)}" if changed else ""))
+        return 0
+    row = dict(issue, **{key: value for key, value in extra.get(issue["id"], {}).items() if key not in issue})
+    if args.json:
+        print(json.dumps(row, indent=2, default=str))
+        return 0
+    brief = out / "handoff" / "issues" / f"{issue['id']}.md"
+    if brief.exists() and issue.get("status") in ACTIVE:
+        print(brief.read_text(encoding="utf-8"))
+    else:
+        for key in ("id", "title", "status", "severity", "category", "classification", "expected", "actual",
+                    "scenario", "verify_kind", "first_seen", "last_seen", "dt_commits"):
+            if row.get(key):
+                print(f"{key}: {row[key]}")
+    history = issue.get("status_history") or []
+    if history:
+        print("\nStatus history:")
+        for entry in history[-10:]:
+            print(f"  {entry['time']} {entry['status']} by {entry.get('by')}"
+                  + (f" on {entry['commit'][:12]}" if entry.get("commit") else "") + (f": {entry['note']}" if entry.get("note") else ""))
+    return 0
+
+
+def cmd_verify(args):
+    from .registry import dataset_dir
+    from .verify import verify
+    out_dataset = Path(args.dataset) if args.dataset else dataset_dir()
+    statuses = ("open", "regressed", "fixed") if not args.status else tuple(args.status.split(","))
+    try:
+        folder, rows = verify(args.issue or None, out_dir=args.out, registry_path=out_dataset / "registry.json",
+                              app_overrides=app_options(args), include_manual=args.include_manual, statuses=statuses,
+                              quiet=args.quiet)
+    except KeyError as error:
+        print(error.args[0])
+        return 1
+    print((folder / "verify-summary.md").read_text(encoding="utf-8"))
+    print(f"Results: {folder}")
+    return 1 if any(row["result"] in ("reproduced",) and row.get("status") == "regressed" for row in rows) else 0
+
+
+def cmd_triage(args):
+    from .registry import dataset_dir
+    from .triage import triage
+    out = Path(args.dataset) if args.dataset else dataset_dir()
+    results = triage(out, model=args.model, max_cost=args.max_cost, limit=args.limit, apply=not args.dry_run,
+                     include_all=args.all)
+    for row in results:
+        print(f"{row['id']}: {row.get('classification', '?')} ({row.get('confidence', '?')}) {row.get('rationale', '')[:160]}")
+    return 0
+
+
+def cmd_campaign(args):
+    from .campaign import Campaign, CampaignOptions
+    options = CampaignOptions(
+        out=args.out, budget=args.budget, models=args.models, missions=args.missions, personas=args.personas,
+        max_steps=args.max_steps, parallel=args.parallel, crawls=args.crawls, crawl_steps=args.crawl_steps,
+        dt_tests=not args.no_dt_tests, dt_mutation=args.dt_mutation, sweep=not args.no_sweep,
+        verify=not args.no_verify, gap_missions=args.gap_missions, dataset=args.dataset, app=app_options(args),
+        quiet=args.quiet)
+    summary = Campaign(options).run()
+    print(f"\nCampaign report: {summary['report']}")
+    return 0 if summary.get("ok") else 1
 
 
 def cmd_mcp(args):
@@ -395,10 +603,12 @@ def build_parser():
                                                     (["--submit"], {"choices": ["enter", "tab"]}),
                                                     (["--paste"], {"action": "store_true"}), (["--repeat"], {"type": int}),
                                                     (["--role"], {})])
-    tool("select", "select_option", "choose a dropdown option", [(["target"], {}), (["option"], {})])
-    tool("check", "set_checked", "tick (or --off untick) a checkbox", [(["target"], {}), (["--off"], {"action": "store_true"})])
+    tool("select", "select_option", "choose a dropdown option", [(["target"], {}), (["option"], {}), (["--role"], {})])
+    tool("check", "set_checked", "tick (or --off untick) a checkbox", [(["target"], {}), (["--off"], {"action": "store_true"}),
+                                                                         (["--role"], {})])
     tool("item", "select_item", "click a list/tree row", [(["target"], {}), (["item"], {}),
-                                                          (["--action"], {"default": "select"})])
+                                                          (["--action"], {"default": "select"}), (["--role"], {}),
+                                                          (["--index"], {"type": int})])
     tool("tab", "select_tab", "select a tab", [(["tab"], {}), (["--target"], {})])
     tool("key", "press_key", "press keys, e.g. Tab or Ctrl+A", [(["keys"], {}), (["--target"], {})])
     tool("draw", "draw", "draw on a drawing area (signature pad)", [(["target"], {}), (["--strokes"], {})])
@@ -440,10 +650,83 @@ def build_parser():
     item.add_argument("--tools", action="store_true", help="only models with tool calling")
     item.add_argument("--vision", action="store_true", help="only models that accept images")
     item.add_argument("--search")
+    item.add_argument("--pick", help="print what auto[-vision|-budget][:N] would choose, e.g. auto:4")
     item = command("report", cmd_report, "merge findings from run folders into one report")
     item.add_argument("paths", nargs="+")
     item.add_argument("--out")
     item.add_argument("--title", default="Jev QA report")
+    item = command("scenario", cmd_scenario, "run, list or record deterministic scenarios (no model needed)")
+    item.add_argument("action", choices=["run", "list", "record"])
+    item.add_argument("target", nargs="?", help="scenario name or file (run), or a run folder (record)")
+    item.add_argument("--out", help="output folder (run) or scenario file (record)")
+    item.add_argument("--until", type=int, help="record: stop at this step number")
+    item.add_argument("--name", help="record: scenario name")
+    add_app_options(item)
+    item = command("sweep", cmd_sweep, "run the full-system sweep: every DT feature, scripted, with coverage")
+    item.add_argument("--only", help="comma-separated parts of scenario names to run")
+    item.add_argument("--out")
+    item.add_argument("--quiet", action="store_true")
+    add_app_options(item)
+    item = command("crawl", cmd_crawl, "explore every reachable control automatically with edge-case input (no model)")
+    item.add_argument("--steps", type=int, default=200)
+    item.add_argument("--random-seed", type=int, default=1, dest="random_seed",
+                      help="the same number on the same DT build replays the same journey")
+    item.add_argument("--max-minutes", type=float, default=30.0)
+    item.add_argument("--out")
+    item.add_argument("--quiet", action="store_true")
+    add_app_options(item)
+    item = command("dataset", cmd_dataset, "build or show the improvement dataset for DT from all runs")
+    item.add_argument("action", choices=["build", "show"], nargs="?", default="show")
+    item.add_argument("--runs", action="append", help="runs folder to read (repeatable; default: the runs folder)")
+    item.add_argument("--out", help="dataset folder (default: $JEV_DATASET_DIR or <runs>/../dataset)")
+    item.add_argument("--no-handoff", action="store_true", help="skip the handoff/ folder for DT")
+    item.add_argument("--top", type=int, default=15)
+    item.add_argument("--quiet", action="store_true")
+    item = command("issues", cmd_issues, "list, show or update issues in the registry")
+    item.add_argument("action", choices=["list", "show", "set"], nargs="?", default="list")
+    item.add_argument("id", nargs="?")
+    item.add_argument("--status", help="list: active (default), all or a status; set: the new status")
+    item.add_argument("--classification")
+    item.add_argument("--severity")
+    item.add_argument("--title")
+    item.add_argument("--duplicate-of", dest="duplicate_of")
+    item.add_argument("--note")
+    item.add_argument("--json", action="store_true")
+    item.add_argument("--dataset", help="dataset folder holding registry.json")
+    item = command("verify", cmd_verify, "replay issue scenarios on the DT checkout and mark issues fixed or regressed")
+    item.add_argument("--issue", action="append", help="issue ID (repeatable; default: every verifiable issue)")
+    item.add_argument("--status", help="with no --issue: statuses to check (default open,regressed,fixed)")
+    item.add_argument("--include-manual", action="store_true", help="also replay tester-reported issues (no verdict)")
+    item.add_argument("--out")
+    item.add_argument("--dataset")
+    item.add_argument("--quiet", action="store_true")
+    add_app_options(item)
+    item = command("triage", cmd_triage, "optional: ask an OpenRouter model to classify unconfirmed issues")
+    item.add_argument("--model", default="auto", help="model ID or auto (cheapest capable)")
+    item.add_argument("--max-cost", type=float, default=0.25)
+    item.add_argument("--limit", type=int, default=15)
+    item.add_argument("--all", action="store_true", help="re-triage issues that already have a triage result")
+    item.add_argument("--dry-run", action="store_true", help="print the verdicts without changing the registry")
+    item.add_argument("--dataset")
+    item = command("campaign", cmd_campaign, "run everything: DT's tests, sweep, verify, crawls, AI testers, dataset")
+    item.add_argument("--out", help="campaign folder (default runs/campaign-<time>)")
+    item.add_argument("--budget", type=float, default=0.0,
+                      help="USD for OpenRouter testers across the campaign (0 = no AI testers)")
+    item.add_argument("--models", default="auto:3", help="models for AI testers (IDs, presets or auto[:N])")
+    item.add_argument("--missions", default="gaps", help="'all', 'gaps' (coverage gaps + core missions) or a list")
+    item.add_argument("--personas", default="new-trainer,edge-case-hunter")
+    item.add_argument("--max-steps", type=int, default=45)
+    item.add_argument("--parallel", type=int, default=2)
+    item.add_argument("--crawls", type=int, default=2, help="crawler runs, each with its own random seed")
+    item.add_argument("--crawl-steps", type=int, default=250)
+    item.add_argument("--gap-missions", type=int, default=3, help="missions written from coverage gaps")
+    item.add_argument("--no-dt-tests", action="store_true", help="skip DT's own unit and desktop tests")
+    item.add_argument("--dt-mutation", action="store_true", help="also run DT's mutation check (slow)")
+    item.add_argument("--no-sweep", action="store_true")
+    item.add_argument("--no-verify", action="store_true")
+    item.add_argument("--dataset", help="dataset folder to update (default: the shared dataset)")
+    item.add_argument("--quiet", action="store_true")
+    add_app_options(item)
     command("missions", cmd_list("missions"), "list built-in missions")
     command("personas", cmd_list("personas"), "list built-in personas")
     item = command("mcp", cmd_mcp, "serve the tools over MCP stdio (for Claude Code, Codex, ...); "
@@ -463,9 +746,21 @@ def translate(tool_name, values):
     return values
 
 
+def utf8_output():
+    """Snapshots contain non-ASCII text; a Windows pipe defaults to cp1252 and would crash."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                pass
+
+
 def main(argv=None):
     load_dotenv()
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] != ["mcp"]:
+        utf8_output()
     if argv[:1] == ["mcp"]:
         from .mcp_server import main as mcp_main
         return mcp_main(argv[1:])

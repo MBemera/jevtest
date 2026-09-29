@@ -1,0 +1,204 @@
+{
+  "name": "05-assess",
+  "title": "Assess: every mark code, notes, NA reasons, CF, parameters, mark key and navigation autosave",
+  "features": [
+    "assess-marks",
+    "observation-notes",
+    "na-reason",
+    "critical-failure",
+    "criterion-parameters",
+    "mark-key",
+    "save-mark-and-next",
+    "autosave-navigation"
+  ],
+  "app": {
+    "seed": "sample"
+  },
+  "steps": [
+    {
+      "do": "select_item",
+      "item": "Sam Synthetic"
+    },
+    {
+      "do": "select_tab",
+      "tab": "2 Assess"
+    },
+    {
+      "do": "select_item",
+      "target": "Observable checks",
+      "item": "E03.01"
+    },
+    {
+      "do": "select_option",
+      "target": "Mark",
+      "role": "combobox",
+      "option": "C"
+    },
+    {
+      "do": "type_text",
+      "target": "Observed behaviour / evidence / intervention",
+      "text": "Checked mirrors before every move."
+    },
+    {
+      "do": "click",
+      "target": "Save mark and next",
+      "expect": {
+        "status": "Saved locally"
+      }
+    },
+    {
+      "do": "select_option",
+      "target": "Mark",
+      "role": "combobox",
+      "option": "D"
+    },
+    {
+      "do": "select_option",
+      "target": "Choose a prepared note or type your own",
+      "option": "Completed after a verbal prompt"
+    },
+    {
+      "do": "click",
+      "target": "Add to observation",
+      "expect": {
+        "contains": "Completed after a verbal prompt"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Save mark and next"
+    },
+    {
+      "do": "select_option",
+      "target": "Mark",
+      "role": "combobox",
+      "option": "NYC"
+    },
+    {
+      "do": "type_text",
+      "target": "Observed behaviour / evidence / intervention",
+      "text": "Did not meet the standard."
+    },
+    {
+      "do": "select_item",
+      "target": "Observable checks",
+      "item": "E04.01",
+      "expect": {
+        "value": {
+          "target": "Observable checks",
+          "contains": "[NYC] E03.03"
+        }
+      }
+    },
+    {
+      "do": "select_option",
+      "target": "Mark",
+      "role": "combobox",
+      "option": "NA"
+    },
+    {
+      "do": "select_option",
+      "target": "Reason when not applicable (NA)",
+      "option": "Outside the assessed scope"
+    },
+    {
+      "do": "click",
+      "target": "Save mark and next"
+    },
+    {
+      "do": "select_item",
+      "target": "Observable checks",
+      "item": "E01.02"
+    },
+    {
+      "do": "select_option",
+      "target": "Mark",
+      "role": "combobox",
+      "option": "NA"
+    },
+    {
+      "do": "click",
+      "target": "Save mark and next"
+    },
+    {
+      "do": "select_tab",
+      "tab": "4 Finalise"
+    },
+    {
+      "do": "expect",
+      "value": {
+        "target": "Steps remaining before signing",
+        "contains": "E01.02"
+      }
+    },
+    {
+      "do": "select_tab",
+      "tab": "2 Assess"
+    },
+    {
+      "do": "click",
+      "target": "Show mark key",
+      "expect": {
+        "contains": "Hide mark key"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Hide mark key"
+    },
+    {
+      "do": "click",
+      "target": "Insert parameter",
+      "tab_hint": "2 Assess",
+      "expect": {
+        "dialog": "Insert parameter"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Parameter name",
+      "text": "Speed km/h",
+      "submit": "enter"
+    },
+    {
+      "do": "type_text",
+      "target": "Speed km/h",
+      "text": "62"
+    },
+    {
+      "do": "select_item",
+      "target": "Observable checks",
+      "item": "E05.01"
+    },
+    {
+      "do": "select_option",
+      "target": "Mark",
+      "role": "combobox",
+      "option": "CF"
+    },
+    {
+      "do": "type_text",
+      "target": "Observed behaviour / evidence / intervention",
+      "text": "Assessor intervened at the stop line."
+    },
+    {
+      "do": "click",
+      "target": "Save mark and next"
+    },
+    {
+      "do": "select_tab",
+      "tab": "4 Finalise",
+      "expect": {
+        "contains": "CRITICAL EVENT"
+      }
+    },
+    {
+      "do": "screenshot",
+      "note": "finalise after CF"
+    },
+    {
+      "do": "audit",
+      "kind": "all"
+    }
+  ]
+}

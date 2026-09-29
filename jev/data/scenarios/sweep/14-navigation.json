@@ -1,0 +1,24 @@
+{
+  "name": "14-navigation",
+  "title": "Navigation: search filter, previous/next trainee wrapping, keyboard tab switching",
+  "features": ["session-search", "previous-next", "keyboard-navigation"],
+  "app": {"seed": "sample"},
+  "steps": [
+    {"do": "type_text", "target": "Search sessions", "text": "riley", "expect": {"contains": "2 hidden by filter"}},
+    {"do": "click", "target": "Next >", "expect": {"contains": "Riley Ready"}},
+    {"do": "expect", "value": {"target": "Driver name", "equals": "Riley Ready"}},
+    {"do": "type_text", "target": "Search sessions", "text": ""},
+    {"do": "click", "target": "Next >"},
+    {"do": "click", "target": "Next >"},
+    {"do": "click", "target": "Next >"},
+    {"do": "click", "target": "< Previous"},
+    {"do": "type_text", "target": "Search sessions", "text": "no such driver", "expect": {"contains": "3 hidden by filter"}},
+    {"do": "click", "target": "Next >"},
+    {"do": "type_text", "target": "Search sessions", "text": ""},
+    {"do": "click", "target": "Organisation"},
+    {"do": "press_key", "keys": "Tab"},
+    {"do": "press_key", "keys": "Tab"},
+    {"do": "press_key", "keys": "Ctrl+Tab", "optional": true, "expect": {"contains": "*2 Assess*"}},
+    {"do": "audit", "kind": "accessibility"}
+  ]
+}

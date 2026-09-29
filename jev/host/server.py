@@ -33,6 +33,23 @@ class UiUnresponsive(Exception):
     pass
 
 
+INTERNAL_ARGUMENTS = {"action", "events_since", "snapshot", "settle", "wait_busy", "ref", "nodes"}
+
+
+def action_arguments(args):
+    """The user-level arguments of an action, trimmed for the event log (no internals)."""
+    kept = {}
+    for key, value in args.items():
+        if key in INTERNAL_ARGUMENTS:
+            continue
+        if key == "strokes":
+            value = f"{len(value)} stroke(s)" if isinstance(value, list) else "custom"
+        elif isinstance(value, str) and len(value) > 300:
+            value = value[:300] + f"... ({len(value)} characters)"
+        kept[key] = value
+    return kept
+
+
 class Job:
     def __init__(self, function):
         self.function = function
@@ -204,17 +221,22 @@ class Host:
                 return self.actions.perform(action, args), self.scheduler.last
 
             outcome, sequence = self.gui(perform)
-            self.log.emit("action", action=action, did=outcome.get("did", ""))
+            self.log.emit("action", action=action, did=outcome.get("did", ""), target=outcome.get("target"),
+                          args=action_arguments(args))
             warnings = self.wait_for_input(sequence, before)
             time.sleep(max(0.0, settle))
             busy = self.wait_while_busy(busy_wait)
         finally:
             self.log.action = ""
-        result = {"did": outcome.get("did", ""), "notes": outcome.get("notes", []) + warnings,
+        result = {"did": outcome.get("did", ""), "target": outcome.get("target"),
+                  "notes": outcome.get("notes", []) + warnings,
                   "events": self.log.since(seq), "seq": self.log.seq, "still_busy": busy,
                   "state": self.gui(self.state)}
-        if args.get("snapshot", True):
-            result["snapshot"] = self.gui(lambda: self.snapshotter.snapshot(app_state=self.app_state())[0])
+        if args.get("snapshot", True) or args.get("nodes"):
+            text, nodes = self.gui(lambda: self.snapshotter.snapshot(app_state=self.app_state()))
+            if args.get("snapshot", True):
+                result["snapshot"] = text
+            result["nodes"] = nodes  # structured controls for traces and coverage; computed with the text anyway
         return result
 
     def wait_for_input(self, sequence, modal_before, timeout=6.0):

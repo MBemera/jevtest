@@ -1,0 +1,16 @@
+{
+  "name": "backup-error-reason",
+  "title": "A refused backup says why it was refused",
+  "issue": {"id": "JEV-0006", "title": "Backing up into the vault folder fails with a generic message that hides the reason",
+            "severity": "medium", "category": "ux",
+            "expected": "The status says 'Choose a backup location outside the active vault'.",
+            "actual": "The status says 'Operation failed. Check destination space, file access and evidence integrity.'",
+            "suspected": ["dt/ui.py: MaintenanceWorker.run replaces every exception with one generic message"]},
+  "app": {"seed": "sample"},
+  "steps": [
+    {"do": "select_item", "item": "Riley Ready"},
+    {"do": "click", "target": "Back up vault"},
+    {"do": "type_text", "target": "Path", "text": "../vaults/seeded-vault", "submit": "enter", "wait_busy": 60,
+     "expect": {"status": "outside the active vault"}}
+  ]
+}

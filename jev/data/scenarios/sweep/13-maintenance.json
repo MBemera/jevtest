@@ -1,0 +1,207 @@
+{
+  "name": "13-maintenance",
+  "title": "Maintenance: recovery check, backups, deletion with passphrase, lock with pending edits, restart",
+  "features": [
+    "recovery-check",
+    "backup",
+    "backup-into-vault",
+    "delete-assessment",
+    "delete-passphrase",
+    "lock-pending-edits",
+    "restart-persistence"
+  ],
+  "app": {
+    "seed": "sample"
+  },
+  "steps": [
+    {
+      "do": "select_item",
+      "item": "Riley Ready"
+    },
+    {
+      "do": "click",
+      "target": "Check recovery",
+      "wait_busy": 30,
+      "expect": {
+        "dialog": "Recovery check"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK"
+    },
+    {
+      "do": "click",
+      "target": "Back up vault",
+      "expect": {
+        "dialog": "file chooser"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Choose folder",
+      "wait_busy": 60
+    },
+    {
+      "do": "wait",
+      "seconds": 60,
+      "until": "dialog"
+    },
+    {
+      "do": "expect",
+      "contains": "Backup verified"
+    },
+    {
+      "do": "click",
+      "target": "OK"
+    },
+    {
+      "do": "click",
+      "target": "Back up vault"
+    },
+    {
+      "do": "type_text",
+      "target": "Path",
+      "text": "../vaults/seeded-vault",
+      "submit": "enter",
+      "wait_busy": 60,
+      "expect": {
+        "status": "outside the active vault"
+      },
+      "on_fail": {
+        "issue": "JEV-0006",
+        "title": "Backing up into the vault folder fails with a generic message that hides the reason",
+        "severity": "medium",
+        "category": "ux",
+        "key": "backup-inside-vault",
+        "expected": "The status says why: 'Choose a backup location outside the active vault' (the reason DT's storage layer raises).",
+        "actual_prefix": "MaintenanceWorker replaces every error with a generic message: "
+      },
+      "soft": true
+    },
+    {
+      "do": "wait",
+      "seconds": 10,
+      "until": "idle"
+    },
+    {
+      "do": "select_item",
+      "item": "New driver"
+    },
+    {
+      "do": "click",
+      "target": "Delete assessment",
+      "expect": {
+        "dialog": "Delete this assessment?"
+      }
+    },
+    {
+      "do": "click",
+      "target": "No",
+      "expect": {
+        "contains": "3 items"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Delete assessment"
+    },
+    {
+      "do": "click",
+      "target": "Yes",
+      "expect": {
+        "dialog": "Vault passphrase required"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Enter the vault passphrase",
+      "text": "wrong-passphrase-000",
+      "submit": "enter",
+      "expect": {
+        "dialog": "Assessment not deleted"
+      }
+    },
+    {
+      "do": "click",
+      "target": "OK",
+      "expect": {
+        "contains": "3 items"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Delete assessment"
+    },
+    {
+      "do": "click",
+      "target": "Yes"
+    },
+    {
+      "do": "type_text",
+      "target": "Enter the vault passphrase",
+      "text": "jev-synthetic-passphrase-2026",
+      "submit": "enter",
+      "expect": {
+        "status": "Assessment deleted",
+        "contains": "2 items"
+      }
+    },
+    {
+      "do": "select_item",
+      "item": "Sam Synthetic"
+    },
+    {
+      "do": "type_text",
+      "target": "Organisation",
+      "text": "Edited before locking",
+      "settle": 0
+    },
+    {
+      "do": "click",
+      "target": "Lock records",
+      "expect": {
+        "contains": "Unlock records"
+      }
+    },
+    {
+      "do": "click",
+      "target": "Unlock records"
+    },
+    {
+      "do": "type_text",
+      "target": "Vault passphrase",
+      "text": "jev-synthetic-passphrase-2026"
+    },
+    {
+      "do": "click",
+      "target": "Open",
+      "role": "button"
+    },
+    {
+      "do": "expect",
+      "value": {
+        "target": "Organisation",
+        "equals": "Edited before locking"
+      }
+    },
+    {
+      "do": "restart_app"
+    },
+    {
+      "do": "expect",
+      "contains": "2 items"
+    },
+    {
+      "do": "select_item",
+      "item": "Sam Synthetic"
+    },
+    {
+      "do": "expect",
+      "value": {
+        "target": "Organisation",
+        "equals": "Edited before locking"
+      }
+    }
+  ]
+}

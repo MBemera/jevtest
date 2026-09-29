@@ -25,7 +25,9 @@ draw, scroll) -> read the result (it includes what happened and a new snapshot) 
 distinct problem. The app starts automatically with defaults (first-run unlock screen); use app_start to
 choose seed=sample (unlocked vault with synthetic records), network=mock, screen size or idle timeout.
 Harness-detected exceptions, freezes and crashes are recorded automatically. run_qa_agents launches
-OpenRouter-model testers in the background; qa_runs shows their progress and reports."""
+OpenRouter-model testers in the background; qa_runs shows their progress and reports. run_campaign runs
+everything (DT's tests, the scripted sweep, crawlers, optional AI testers) and rebuilds the improvement
+dataset; dataset, issues, set_issue and verify_issues work with the issue registry and DT handoff."""
 
 EXTRA_SPECS = [
     spec("run_qa_agents", "Launch autonomous OpenRouter-model testers in the background (needs "
@@ -40,7 +42,37 @@ EXTRA_SPECS = [
     spec("qa_runs", "List background QA runs with their status, or show one run's report.",
          {"run": {"type": "string", "description": "Optional run folder name to show its report."}},
          audiences=("mcp",)),
+    spec("run_campaign", "Start a full Jev campaign in the background: DT's own tests, the scripted sweep of every "
+         "feature, re-verification of known issues, seeded crawlers and (only with a budget and an OpenRouter key) "
+         "AI testers, then rebuild the improvement dataset for DT. Follow it with campaign_status.",
+         {"budget": {"type": "number", "description": "USD for AI testers (default 0 = none)."},
+          "crawls": {"type": "integer", "description": "Crawler runs (default 2)."},
+          "crawl_steps": {"type": "integer", "description": "Steps per crawl (default 250)."},
+          "models": {"type": "string", "description": "AI tester models (IDs, presets or auto:N)."},
+          "missions": {"type": "string", "description": "'gaps' (default), 'all' or a comma list."},
+          "dt_tests": {"type": "boolean", "description": "Run DT's own test suites (default true)."},
+          "sweep": {"type": "boolean", "description": "Run the scripted sweep (default true)."}},
+         audiences=("mcp",)),
+    spec("campaign_status", "Progress of the latest (or a named) campaign; its report once finished.",
+         {"campaign": {"type": "string", "description": "Optional campaign folder name."}}, audiences=("mcp",)),
+    spec("dataset", "Build (action=build) or summarise (action=show, default) the improvement dataset: issues, "
+         "coverage gaps, copy and speed problems, ranked for DT.",
+         {"action": {"type": "string", "description": "show (default) or build."}}, audiences=("mcp",)),
+    spec("issues", "List issues in the registry (status: active (default), all, open, fixed, regressed...), or "
+         "show one issue's brief with id.",
+         {"status": {"type": "string"}, "id": {"type": "string", "description": "Issue ID such as JEV-0003."}},
+         audiences=("mcp",)),
+    spec("set_issue", "Update an issue after you triage or reproduce it: status (open, fixed, wontfix, by-design, "
+         "known-limitation, harness-artefact), classification, severity, duplicate_of or a note.",
+         {"id": {"type": "string"}, "status": {"type": "string"}, "classification": {"type": "string"},
+          "severity": {"type": "string"}, "duplicate_of": {"type": "string"}, "note": {"type": "string"}},
+         ["id"], audiences=("mcp",)),
+    spec("verify_issues", "Replay the scenario behind known issues on the current DT checkout (background). "
+         "Passing replays mark issues fixed; failing ones mark fixed issues regressed.",
+         {"ids": {"type": "string", "description": "Comma-separated issue IDs (default: every verifiable issue)."}},
+         audiences=("mcp",)),
 ]
+BACKGROUND_TOOLS = {"run_campaign", "campaign_status", "dataset", "issues", "set_issue", "verify_issues"}
 
 
 def log(message):
@@ -137,6 +169,8 @@ class McpServer:
             result = self.run_qa_agents(arguments)
         elif name == "qa_runs":
             result = self.qa_runs(arguments)
+        elif name in BACKGROUND_TOOLS:
+            result = getattr(self, "tool_" + name)(arguments)
         else:
             if self.runner is None:
                 self.runner = ToolRunner(self.session_dir, app_options=self.app_options, reporter=self.client_name,
@@ -198,6 +232,87 @@ class McpServer:
                 data = json.loads((folder / "run.json").read_text(encoding="utf-8"))
                 lines.append(f"{folder.name}: {data.get('findings')} finding(s), {data.get('stop_reason')}")
         return ToolResult("\n".join(lines) or "No runs yet.")
+
+    # ----- campaigns, dataset and issues ----------------------------------------------------
+    def start_background(self, arguments, out, log_name):
+        log_file = open(out / log_name, "w", encoding="utf-8")
+        environment = dict(os.environ, PYTHONPATH=os.pathsep.join(filter(None, [str(REPO_DIR), os.environ.get("PYTHONPATH")])))
+        process = subprocess.Popen([sys.executable, "-m", "jev", *arguments], stdout=log_file, stderr=subprocess.STDOUT,
+                                   stdin=subprocess.DEVNULL, cwd=str(REPO_DIR), env=environment)
+        self.background.append((out, process))
+        return process
+
+    def tool_run_campaign(self, arguments):
+        load_dotenv()
+        out = runs_dir() / f"campaign-{time.strftime('%Y%m%d-%H%M%S')}"
+        out.mkdir(parents=True, exist_ok=True)
+        command = ["campaign", "--out", str(out), "--quiet"]
+        for key, flag in (("budget", "--budget"), ("crawls", "--crawls"), ("crawl_steps", "--crawl-steps"),
+                          ("models", "--models"), ("missions", "--missions")):
+            if arguments.get(key) not in (None, ""):
+                command += [flag, str(arguments[key])]
+        if arguments.get("dt_tests") is False:
+            command.append("--no-dt-tests")
+        if arguments.get("sweep") is False:
+            command.append("--no-sweep")
+        process = self.start_background(command, out, "campaign.log")
+        return ToolResult(f"Campaign started (process {process.pid}) in {out}. It takes from about 15 minutes "
+                          "(no AI testers) upwards. Use campaign_status to follow it.")
+
+    def tool_campaign_status(self, arguments):
+        root = runs_dir()
+        folders = [root / arguments["campaign"]] if arguments.get("campaign") else sorted(root.glob("campaign-*"))[-1:]
+        if not folders or not folders[0].exists():
+            return ToolResult("No campaign found.")
+        folder = folders[0]
+        if (folder / "report.md").exists():
+            return ToolResult((folder / "report.md").read_text(encoding="utf-8")[:60000])
+        progress = folder / "progress.json"
+        if not progress.exists():
+            return ToolResult(f"{folder.name}: starting (no progress yet).")
+        data = json.loads(progress.read_text(encoding="utf-8"))
+        lines = [f"{folder.name}: running stage {data.get('current')!r}"]
+        lines += [f"- {stage['name']}: {stage['status']} ({stage['seconds']}s) {str(stage.get('detail') or '')[:200]}"
+                  for stage in data.get("stages", [])]
+        return ToolResult("\n".join(lines))
+
+    def cli_output(self, argv):
+        import contextlib
+        import io
+        from .cli import build_parser
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            args = build_parser().parse_args(argv)
+            code = args.handler(args) or 0
+        return ToolResult(buffer.getvalue()[:60000] or "(no output)", is_error=bool(code))
+
+    def tool_dataset(self, arguments):
+        action = arguments.get("action") or "show"
+        return self.cli_output(["dataset", "build" if action == "build" else "show", *(["--quiet"] if action == "build" else [])])
+
+    def tool_issues(self, arguments):
+        if arguments.get("id"):
+            return self.cli_output(["issues", "show", str(arguments["id"])])
+        return self.cli_output(["issues", "list", "--status", str(arguments.get("status") or "active")])
+
+    def tool_set_issue(self, arguments):
+        argv = ["issues", "set", str(arguments["id"])]
+        for key, flag in (("status", "--status"), ("classification", "--classification"), ("severity", "--severity"),
+                          ("duplicate_of", "--duplicate-of"), ("note", "--note")):
+            if arguments.get(key):
+                argv += [flag, str(arguments[key])]
+        return self.cli_output(argv)
+
+    def tool_verify_issues(self, arguments):
+        out = runs_dir() / f"verify-{time.strftime('%Y%m%d-%H%M%S')}"
+        out.mkdir(parents=True, exist_ok=True)
+        command = ["verify", "--out", str(out), "--quiet"]
+        for issue_id in str(arguments.get("ids") or "").split(","):
+            if issue_id.strip():
+                command += ["--issue", issue_id.strip()]
+        process = self.start_background(command, out, "verify.log")
+        return ToolResult(f"Verification started (process {process.pid}); results in {out / 'verify-summary.md'} "
+                          "when it finishes (about 30 s per issue). Then use issues to see statuses.")
 
     def shutdown(self):
         if self.runner is not None:

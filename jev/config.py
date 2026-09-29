@@ -2,7 +2,9 @@
 
 import os
 import shutil
+import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -101,3 +103,25 @@ def dt_tools_directory():
 
 def data_file(*parts):
     return DATA_DIR.joinpath(*parts)
+
+
+@lru_cache(maxsize=4)
+def dt_version(checkout=None):
+    """Commit of the DT checkout under test, so every finding can be tied to a DT version."""
+    checkout = Path(checkout) if checkout else dt_path()
+    info = {"path": str(checkout) if checkout else "", "commit": "", "branch": "", "dirty": None}
+    if checkout is None:
+        return info
+
+    def git(*args):
+        try:
+            result = subprocess.run(["git", "-C", str(checkout), *args], capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    info["commit"] = git("rev-parse", "HEAD")
+    info["branch"] = git("rev-parse", "--abbrev-ref", "HEAD")
+    status = git("status", "--porcelain", "--untracked-files=no")
+    info["dirty"] = bool(status) if info["commit"] else None
+    return info

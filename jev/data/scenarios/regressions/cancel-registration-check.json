@@ -1,0 +1,61 @@
+{
+  "name": "cancel-registration-check",
+  "title": "Cancel registration check stops a slow NHVR request",
+  "issue": {"id": "JEV-0004", 
+    "title": "Cancel registration check does nothing while the NHVR request is running",
+    "severity": "medium",
+    "category": "functional",
+    "expected": "Cancel registration check stops waiting at once and says so.",
+    "actual": "The click is ignored until NHVR answers.",
+    "suspected": [
+      "dt/ui.py: registration_rows connects every button, including Cancel registration check, through run_action, which returns while busy()",
+      "dt/registration.py: get_json blocks in opener.open for up to 15 s, so even a wired button would wait"
+    ]
+  },
+  "app": {
+    "seed": "sample",
+    "network": "mock"
+  },
+  "steps": [
+    {
+      "do": "select_item",
+      "item": "Sam Synthetic"
+    },
+    {
+      "do": "click",
+      "target": "Registration check setup (optional)"
+    },
+    {
+      "do": "type_text",
+      "target": "NHVR subscription key",
+      "text": "jev-synthetic-key-123"
+    },
+    {
+      "do": "click",
+      "target": "Save"
+    },
+    {
+      "do": "set_network_mock",
+      "scenario": "slow",
+      "service": "nhvr",
+      "delay": 8
+    },
+    {
+      "do": "click",
+      "target": "Check registration with NHVR"
+    },
+    {
+      "do": "click",
+      "target": "Send this plate",
+      "wait_busy": 0
+    },
+    {
+      "do": "click",
+      "target": "Cancel registration check",
+      "wait_busy": 4,
+      "expect": {
+        "status": "cancelled"
+      }
+    }
+  ]
+}

@@ -40,6 +40,10 @@ RAW_ERROR_PATTERNS = [
         r"sqlite3\.",
         r"\bJSONDecodeError\b",
         r"Expecting value: line \d+",
+        r"\b0x[0-9a-f]{8,}\b",
+        r"\[[\w,]+ @ 0x[0-9a-f]+\]",
+        r"Invalid data found when processing input",
+        r"moov atom not found",
     )
 ]
 # A message that is only a quoted identifier, e.g. "'fleet_id'", is usually str(KeyError).
