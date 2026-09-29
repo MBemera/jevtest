@@ -7,7 +7,7 @@ from pathlib import Path
 
 from jev.campaign import fit_budget, parse_unittest, write_gap_missions
 from jev.config import dt_path, dt_version
-from jev.dataset import build, split_key
+from jev.dataset import build, export, split_key
 from jev.dtsource import SourceIndex, parse_frames
 from jev.registry import Registry
 from jev.scenarios import ScenarioResult
@@ -221,6 +221,11 @@ class DatasetBuildTests(TempDirTestCase):
         before = len(Registry(out / "registry.json").issues)
         build(out_dir=out, roots=[runs], quiet=True)
         self.assertEqual(len(Registry(out / "registry.json").issues), before, "rebuilding must not duplicate issues")
+        shared = export(out, self.root / "shared")
+        self.assertTrue((shared / "handoff" / "README.md").exists())
+        for path in shared.rglob("*"):
+            if path.is_file() and path.suffix in (".md", ".json", ".jsonl", ".csv"):
+                self.assertNotIn(str(self.root), path.read_text(encoding="utf-8"), path)
 
     def test_source_index_locates_text_and_frames(self):
         index = SourceIndex()

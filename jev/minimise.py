@@ -18,6 +18,9 @@ MINIMISABLE = ("exception@", "crash@", "hang@", "stall@", "text@", "qt@")
 
 
 def minimisable(issue):
+    """Recorded replays of harness-detected issues; hand-written regression scenarios are already minimal."""
+    if issue.get("verify_kind") == "expectations" or issue.get("origin") == "built-in regression scenario":
+        return False
     return any(str(signature).startswith(MINIMISABLE) for signature in issue.get("signatures") or [])
 
 
@@ -26,6 +29,10 @@ class Minimiser:
         self.scenario = dict(scenario)
         self.signatures = {str(item) for item in signatures if str(item).startswith(MINIMISABLE)}
         self.out_dir = Path(out_dir)
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        # Trial replays break journeys on purpose; they are not evidence about DT.
+        (self.out_dir / ".jev-ignore").write_text("Delta-debugging trials; `jev dataset build` skips this folder.\n",
+                                                  encoding="utf-8")
         self.deadline = time.time() + max_minutes * 60
         self.app_overrides = app_overrides
         self.log = log or (lambda message: None)
@@ -84,8 +91,8 @@ def minimise_issue(registry, issue_id, out_dir, *, scenarios_dir, max_minutes=4.
     if not issue.get("scenario"):
         raise ValueError(f"{issue['id']} has no replay yet; run `jev dataset build` first")
     if not minimisable(issue):
-        raise ValueError(f"{issue['id']} is not recognised by a harness signature, so it cannot be minimised "
-                         "automatically")
+        raise ValueError(f"{issue['id']} cannot be minimised automatically: it is a hand-written regression "
+                         "scenario or it is not recognised by a harness signature")
     scenario = load_scenario(issue["scenario"])
     log(f"Minimising {issue['id']} ({len(scenario.get('steps', []))} steps): {issue.get('title')}")
     result = Minimiser(scenario, issue.get("signatures") or [], Path(out_dir) / issue["id"], max_minutes=max_minutes,

@@ -134,3 +134,8 @@ The dataset folder is plain files. `registry.json` is the only part with state t
 between builds: commit or copy it to keep issue IDs and history consistent across machines.
 Everything else is rebuilt from the runs. Runs contain only synthetic data, but evidence
 screenshots show the app, so review them before sharing outside your team.
+
+`jev dataset export --to <folder>` makes the copy to share. It keeps the backlog, the handoff briefs,
+the replays, the registry and the summary tables, and one screenshot per issue
+(`--max-screenshots` changes this). It leaves out the raw runs and replaces local paths with
+`<runs>`, `<dataset>` and `~`.

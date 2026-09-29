@@ -74,8 +74,8 @@ class Campaign:
 
     # ----- plumbing -------------------------------------------------------------------
     def log(self, message):
-        if not self.options.quiet:
-            print(f"[campaign {time.strftime('%H:%M:%S')}] {message}", flush=True)
+        # Stage progress always prints; --quiet only silences the step-by-step output of each stage.
+        print(f"[campaign {time.strftime('%H:%M:%S')}] {message}", flush=True)
 
     def progress(self, current=None):
         payload = {"root": str(self.root), "started": self.started, "current": current, "stages": self.stages,

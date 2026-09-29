@@ -102,6 +102,10 @@ JEV_DT_PATH=/path/to/DT-branch jev verify --issue JEV-0003  # replay: passes -> 
 jev campaign                                              # later runs mark it regressed if it comes back
 ```
 
+`jev dataset export --to <folder>` writes a shareable copy for DT's team: the backlog, briefs,
+replays and one screenshot per issue, without raw runs or local paths.
+[docs/baseline/](docs/baseline/README.md) is such a copy, from a campaign against DT `6ead556`.
+
 `jev issues set JEV-0105 --status by-design --note "..."` records a triage decision.
 `jev triage --max-cost 0.25` optionally asks a cheap OpenRouter model to classify unconfirmed
 issues. It only routes to providers that do not store prompts, records its reasoning, and
@@ -163,9 +167,10 @@ found four real DT issues.
 
 ## Use it from Claude Code
 
-This repository ships `.mcp.json`, which registers the `jev` MCP server, plus a `/qa` command
-and a `dt-qa` skill. Open Claude Code in this folder and approve the server. Then ask, for
-example, "QA the evidence import flow" or run `/qa evidence-media edge-case-hunter`.
+This repository ships `.mcp.json`, which registers the `jev` MCP server, plus `/qa` and
+`/campaign` commands and a `dt-qa` skill. Open Claude Code in this folder and approve the server.
+Then ask, for example, "QA the evidence import flow", run `/qa evidence-media edge-case-hunter`,
+or run `/campaign` to have Jev exercise all of DT and triage the resulting dataset.
 
 To make the server available in every project instead, see `examples/claude-code-user-scope.sh`.
 

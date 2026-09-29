@@ -385,6 +385,18 @@ def cmd_dataset(args):
     from .dataset import build
     from .registry import dataset_dir
     out = Path(args.out) if args.out else dataset_dir()
+    if args.action == "export":
+        from .dataset import export
+        if not args.to:
+            print("Give the destination: jev dataset export --to <folder>")
+            return 1
+        try:
+            target = export(out, Path(args.to), max_screenshots=args.max_screenshots)
+        except FileNotFoundError as error:
+            print(error)
+            return 1
+        print(f"Exported the reports, briefs and replays (no raw runs, local paths removed) to {target}")
+        return 0
     if args.action == "build":
         roots = [Path(path) for path in args.runs] if args.runs else None
         summary = build(out_dir=out, roots=roots, handoff=not args.no_handoff, quiet=args.quiet)
@@ -698,7 +710,9 @@ def build_parser():
     item.add_argument("--quiet", action="store_true")
     add_app_options(item)
     item = command("dataset", cmd_dataset, "build or show the improvement dataset for DT from all runs")
-    item.add_argument("action", choices=["build", "show"], nargs="?", default="show")
+    item.add_argument("action", choices=["build", "show", "export"], nargs="?", default="show")
+    item.add_argument("--to", help="export: destination folder for a shareable copy")
+    item.add_argument("--max-screenshots", type=int, default=1, help="export: screenshots kept per issue")
     item.add_argument("--runs", action="append", help="runs folder to read (repeatable; default: the runs folder)")
     item.add_argument("--out", help="dataset folder (default: $JEV_DATASET_DIR or <runs>/../dataset)")
     item.add_argument("--no-handoff", action="store_true", help="skip the handoff/ folder for DT")
@@ -801,6 +815,12 @@ def main(argv=None):
         return args.handler(args) or 0
     except KeyboardInterrupt:
         return 130
+    except BrokenPipeError:  # e.g. `jev issues | head`
+        try:
+            sys.stdout = open(os.devnull, "w", encoding="utf-8")
+        except OSError:
+            pass
+        return 0
 
 
 if __name__ == "__main__":

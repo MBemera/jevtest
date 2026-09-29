@@ -118,7 +118,20 @@ def text_signature(where, text, reason):
     """Same place and same kind of leaked error = same issue, whatever file name or number it quotes."""
     head = re.split(r"[\[:]", str(text or ""), maxsplit=1)[0]
     head = re.sub(r"\d+", "#", normalise_title(head))[:60].strip()
-    return f"text@{where}|{head or reason}"
+    kind = re.sub(r"\s+", " ", normalise_title(reason)).strip()  # e.g. "matches errno d": no regex escapes
+    head = re.sub(r"\s+", " ", head)
+    return f"text@{where}|{head or kind}"
+
+
+def canonical_signature(finding):
+    """Recompute a leaked-text signature with the current rules, so older runs merge with newer ones."""
+    signature = str(finding.get("signature") or "")
+    if finding.get("source") != "harness" or not signature.startswith("text@"):
+        return signature
+    match = re.search(r"\((dialog '.*'|status bar)\)\s*$", str(finding.get("title") or ""))
+    if not match:
+        return signature
+    return text_signature(match.group(1), finding.get("actual", ""), finding.get("details", ""))
 
 
 def stack_signature(stack):

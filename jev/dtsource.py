@@ -244,7 +244,7 @@ class SourceIndex:
                     exact.append(item)
                     continue
                 literal = literal.replace("{}", " ").strip()
-            if len(wanted) >= 10 and wanted in literal:
+            if len(wanted) >= 24 and wanted in literal:  # a sentence fragment, not a short label
                 partial.append(item)
             elif len(literal) >= 14 and literal in wanted:
                 partial.append(item)

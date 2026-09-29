@@ -52,6 +52,7 @@ class MinimiseTests(TempDirTestCase):
         self.assertTrue(result["reproduced"])
         self.assertLessEqual(len(result["steps"]), 3, result["steps"])
         self.assertIn("no-such-folder", json.dumps(result["steps"]))
+        self.assertTrue((self.root / "minimise" / ".jev-ignore").exists(), "trials stay out of the dataset")
 
 
 @requires_app

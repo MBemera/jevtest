@@ -26,7 +26,7 @@ from pathlib import Path
 from . import __version__
 from .config import dt_path, dt_version, runs_dir
 from .dtsource import SourceIndex, known_limitations, normalise, parse_frames
-from .findings import SEVERITY_RANK
+from .findings import SEVERITY_RANK, canonical_signature, text_signature
 from .registry import ACTIVE, Registry, dataset_dir, now
 
 SEVERITY_POINTS = {"critical": 100, "high": 60, "medium": 30, "low": 10, "info": 3}
@@ -131,6 +131,8 @@ def discover(roots):
         stack = [(root, 0)]
         while stack:
             folder, depth = stack.pop()
+            if (folder / ".jev-ignore").exists():
+                continue  # e.g. minimiser trials, which break journeys on purpose
             if folder.name == "dt-tests":
                 if (folder / "coverage.json").exists():
                     test_coverage.append(folder / "coverage.json")
@@ -246,6 +248,9 @@ class DatasetBuilder:
             for finding in findings:
                 finding["run"] = run["id"]
                 finding["ref"] = f"{run['id']}#{finding.get('id')}"
+                canonical = canonical_signature(finding)
+                if canonical and canonical != finding.get("signature"):
+                    finding["raw_signature"], finding["signature"] = finding.get("signature"), canonical
             coverage = read_json(folder / "app" / "coverage.json")
             run["coverage"] = coverage.get("files") if coverage else None
             run["coverage_tool"] = coverage.get("tool", "") if coverage else ""
@@ -365,24 +370,26 @@ class DatasetBuilder:
                     add(*frames[0], "outermost DT frame")
         if index is None:
             return places
-        texts = []
+        # Most specific first: text quoted in the report, text shown on screen, the control, the last step.
+        texts, controls, steps = [], [], []
+        for text in quoted_texts(" ".join(str(issue.get(key) or "") for key in ("title", "expected", "actual"))):
+            texts.append((text, f"text '{text[:60]}'"))
         for finding in findings[:10]:
-            evidence = finding.get("evidence") if isinstance(finding.get("evidence"), dict) else {}
-            for key in ("target", "last_action_target"):
-                target = evidence.get(key) or {}
-                if target.get("name"):
-                    texts.append((target["name"], f"the control '{target['name']}'"))
             for text in quoted_texts(" ".join(str(finding.get(key) or "") for key in ("title", "actual", "expected"))):
                 texts.append((text, f"text '{text[:60]}'"))
             if finding.get("source") == "harness" and finding.get("category") == "copy":
                 shown = str(finding.get("actual") or "")
                 head = re.split(r"[\[]|: ", shown, maxsplit=1)[0].strip()
                 texts.append((head if len(head) >= 10 else shown[:200], "the text shown on screen"))
+            evidence = finding.get("evidence") if isinstance(finding.get("evidence"), dict) else {}
+            for key in ("target", "last_action_target"):
+                target = evidence.get(key) or {}
+                if target.get("name"):
+                    controls.append((target["name"], f"the control '{target['name']}'"))
             for step in (finding.get("steps") or [])[-1:] if isinstance(finding.get("steps"), list) else []:
                 for text in quoted_texts(str(step)):
-                    texts.append((text, f"the step '{str(step)[:60]}'"))
-        for text in quoted_texts(" ".join(str(issue.get(key) or "") for key in ("title", "expected", "actual"))):
-            texts.append((text, f"text '{text[:60]}'"))
+                    steps.append((text, f"the step '{str(step)[:60]}'"))
+        texts += controls + steps
         done = set()
         for text, why in texts:
             if normalise(text) in done:
@@ -400,7 +407,7 @@ class DatasetBuilder:
         if index is None:
             return []
         files = re.findall(r"dt/\w+\.py", text)
-        names = re.findall(r"\b([A-Z]\w+\.\w+|[a-z_]\w+(?=\s*\(|\s+(?:sets|keeps|replaces|rebuilds|clears|connects|wires|blocks)))",
+        names = re.findall(r"\b([A-Z]\w+\.\w+|[a-z_]\w+(?=\s*\(|\s+(?:sets|keeps|replaces|rebuilds|clears|connects|wires|blocks|raises|shows|returns|calls|sends|ignores|drops|loses|uses)\b))",
                            text)
         found = []
         for name in names:
@@ -537,8 +544,9 @@ class DatasetBuilder:
 
     # ----- copy, inputs and speed ----------------------------------------------------
     def copy_checks(self, index):
+        from .host.monitor import raw_error_reason
         # Leaked error text the harness already reported is an issue in its own right; do not list it twice.
-        reported = {normalise(str(finding.get("actual") or ""))[:80] for finding in self.findings
+        reported = {finding.get("signature") for finding in self.findings
                     if finding.get("source") == "harness" and finding.get("category") == "copy"}
         texts = {}
         if index is not None:
@@ -558,11 +566,15 @@ class DatasetBuilder:
                                                                "where": f"{step['run']} step {step.get('step')}",
                                                                "function": "", "seen": 0, "origin": "screen"})
                         item["seen"] += 1
+                        if kind == "dialog message":
+                            item["signature"] = text_signature(f"dialog '{dialog.get('title')}'", text,
+                                                               raw_error_reason(text))
             for text in events.get("status", []):
                 item = texts.setdefault((text, "status bar"), {"text": text, "kind": "status bar",
                                                                "where": f"{step['run']} step {step.get('step')}",
                                                                "function": "", "seen": 0, "origin": "screen"})
                 item["seen"] += 1
+                item["signature"] = text_signature("status bar", text, raw_error_reason(text))
         problems = []
         buttons = [item for item in texts.values() if item["kind"] == "button"]
         sentence = sum(1 for item in buttons if not title_case(item["text"]))
@@ -570,7 +582,7 @@ class DatasetBuilder:
             text = str(item["text"])
             screen = item["origin"] == "screen"
             if ERROR_LEAK.search(text) and (screen or item["kind"] in ("message", "status")):
-                if screen and normalise(text)[:80] in reported:
+                if screen and item.get("signature") in reported:
                     continue
                 problems.append(dict(item, check="technical error text", severity="medium",
                                      detail="Shows exception or system error wording to the user."))
@@ -1217,6 +1229,52 @@ Priority scores: issues use severity points (critical 100, high 60, medium 30, l
 category, confidence, reach (runs that hit it) and reporter weights; regressions count 1.3x and
 documented limitations 0.3x. Other items use fixed scores so that confirmed bugs rank first.
 """
+
+
+def export(dataset, target, *, max_screenshots=1, roots=None):
+    """A shareable copy of the dataset's reports: no raw runs, no local paths, few screenshots."""
+    dataset, target = Path(dataset), Path(target)
+    if not (dataset / "dataset.json").exists():
+        raise FileNotFoundError(f"No dataset in {dataset}; run `jev dataset build` first")
+    summary = json.loads((dataset / "dataset.json").read_text(encoding="utf-8"))
+    replacements = [(str(Path(root).resolve()), "<runs>") for root in (roots or summary.get("roots") or [])]
+    replacements += [(str(dataset.resolve()), "<dataset>"), (str(Path.home()), "~")]
+    replacements.sort(key=lambda pair: -len(pair[0]))
+
+    def clean(text):
+        for old, new in replacements:
+            text = text.replace(old, new).replace(old.replace("\\", "/"), new)
+        return text
+
+    if target.exists():
+        shutil.rmtree(target)
+    (target / "handoff").mkdir(parents=True)
+    files = ["improvements.md", "README.md", "dataset.json", "registry.json", "issues.jsonl", "improvements.jsonl",
+             "history.jsonl", "code_files.csv", "copy_problems.csv", "copy_terms.csv", "ui_unseen.csv"]
+    for name in files:
+        if (dataset / name).exists():
+            (target / name).write_text(clean((dataset / name).read_text(encoding="utf-8")), encoding="utf-8")
+    handoff = dataset / "handoff"
+    for source in sorted(handoff.rglob("*")) if handoff.exists() else []:
+        if source.is_dir():
+            continue
+        relative = source.relative_to(handoff)
+        destination = target / "handoff" / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if source.suffix.lower() == ".png":
+            number = re.search(r"-(\d+)\.png$", source.name)
+            if number and int(number.group(1)) > max_screenshots:
+                continue
+            shutil.copyfile(source, destination)
+        else:
+            destination.write_text(clean(source.read_text(encoding="utf-8")), encoding="utf-8")
+    for brief in (target / "handoff" / "issues").glob("*.md"):
+        text = brief.read_text(encoding="utf-8")
+        kept = [line for line in text.splitlines()
+                if not re.match(r"!\[screenshot\]\(\.\./evidence/.+-(\d+)\.png\)", line)
+                or int(re.search(r"-(\d+)\.png", line).group(1)) <= max_screenshots]
+        brief.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    return target
 
 
 def build(out_dir=None, roots=None, checkout=None, handoff=True, quiet=False):

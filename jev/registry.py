@@ -96,7 +96,7 @@ class Registry:
                          "verifications": [], "signatures": [], "first_seen": "", "last_seen": ""}
                 self.issues[block["id"]] = issue
             # Scenario text is authoritative for these fields; status and history belong to the registry.
-            for key in ("title", "severity", "category", "expected", "actual"):
+            for key in ("title", "severity", "category", "expected", "actual", "classification"):
                 if block.get(key):
                     issue[key] = block[key]
             issue["suspected"] = list(block.get("suspected") or [])
@@ -107,7 +107,8 @@ class Registry:
             names = set(issue.get("scenario_names") or [])
             names.add(scenario["name"])
             issue["scenario_names"] = sorted(names)
-            for signature in step_signatures.get(block["id"], []):
+            # Harness detections of the same problem (from crawls, sweeps or testers) join this issue too.
+            for signature in step_signatures.get(block["id"], []) + list(block.get("signatures") or []):
                 if signature not in issue["signatures"]:
                     issue["signatures"].append(signature)
 
