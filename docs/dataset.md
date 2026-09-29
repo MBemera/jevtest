@@ -94,7 +94,7 @@ Issues: severity points (critical 100, high 60, medium 30, low 10, info 3), mult
 
 - the category weight (data loss, crash and security x1.5; exception and freeze x1.25; functional x1.1)
 - confidence (confirmed 1, likely 0.8, possible 0.5)
-- reach: 1 + log2(1 + runs that hit it)
+- reach: 1 + log2(1 + runs that found it; `jev verify` and regression replays do not count)
 - reporters: +25% per extra independent reporter
 - status: x1.3 when regressed
 - x0.3 when it matches a limitation DT documents as not implemented

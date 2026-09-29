@@ -1,0 +1,557 @@
+{
+  "format": 1,
+  "updated": "2026-09-29T06:15:41",
+  "issues": {
+    "JEV-0001": {
+      "id": "JEV-0001",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:09:31",
+          "result": "reproduced",
+          "reason": "step 7 (select_tab): expected the screen not to contain 'STOPPED'; expected the screen not to contain 'CRITICAL EVENT'",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0001-mark-wheel-critical-failure"
+        }
+      ],
+      "signatures": [
+        "scenario@mark-wheel-critical-failure#7"
+      ],
+      "first_seen": "2026-09-29T06:09:30",
+      "last_seen": "2026-09-29T06:09:30",
+      "title": "Mouse wheel over the Mark dropdown can set CF and permanently stop the session with no confirmation",
+      "severity": "high",
+      "category": "data-loss",
+      "expected": "Wheel scrolling over the Mark dropdown does not change the mark (or CF asks for confirmation), and returning the mark leaves the outcome unchanged.",
+      "actual": "Four wheel notches move C -> D -> NYC -> NA -> CF with autosave; the record becomes STOPPED / Not yet competent and stays so after the mark is changed back.",
+      "suspected": [
+        "dt/ui.py: MainWindow.mark_box QComboBox accepts wheel events without focus",
+        "dt/drafts.py: DraftBuffer.mark keeps state 'stopped' once any CF was recorded"
+      ],
+      "dt_test": "tests/desktop/test_ui.py: open a check on 2 Assess, send QWheelEvents to window.mark_choice without giving it focus, and assert the mark and outcome are unchanged. Also assert that choosing CF asks for confirmation before the session stops.",
+      "scenario": "regressions/mark-wheel-critical-failure",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "mark-wheel-critical-failure"
+      ],
+      "aliases": [
+        "Scrolling the mouse wheel over the Mark dropdown does not stop the session: step 7 (Open the \"4 Finalise\" tab) did not behave as expected"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ]
+    },
+    "JEV-0002": {
+      "id": "JEV-0002",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:09:35",
+          "result": "reproduced",
+          "reason": "step 2 (type_text): expected the screen to contain 'combobox \"Truck make\" = \"KENWORTH\"'; expected the screen not to contain 'is not in the Australian approvals register'",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0002-truck-make-inline-completion"
+        }
+      ],
+      "signatures": [
+        "scenario@truck-make-inline-completion#2"
+      ],
+      "first_seen": "2026-09-29T06:09:34",
+      "last_seen": "2026-09-29T06:09:34",
+      "title": "Typing a truck make key by key saves a corrupted value (KENWORTH becomes KENWORTHWORTH)",
+      "severity": "high",
+      "category": "functional",
+      "expected": "After typing KENWORTH and pressing Tab, Truck make is KENWORTH and no 'not in the register' note appears.",
+      "actual": "The field holds KENWORTHWORTH ('Ken' gives 'KenT KENWORTH'), and DT records that value.",
+      "suspected": [
+        "dt/ui.py: MainWindow.searchable_combo sets Qt.MatchContains on the editable combo's default InlineCompletion completer"
+      ],
+      "dt_test": "tests/desktop/test_vehicle_ui.py: combo = window.vehicle_choices['truck_make']; focus it, QTest.keyClicks(combo.lineEdit(), 'KENWORTH'), press Tab, then assert combo.currentText() == 'KENWORTH' and that the saved preparation holds 'KENWORTH'.",
+      "scenario": "regressions/truck-make-inline-completion",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "truck-make-inline-completion"
+      ],
+      "aliases": [
+        "Typing a truck make key by key keeps exactly what was typed: step 2 (Type \"KENWORTH\" into \"Truck make\" and press Tab) did not behave as expected"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ]
+    },
+    "JEV-0003": {
+      "id": "JEV-0003",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:09:12",
+          "result": "reproduced",
+          "reason": "step 11 (click): expected a status bar message containing 'cancelled'; the status bar said ['Requesting an AI draft. Review it before applying; Cancel report request stops waiting.']",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0003-cancel-report-request"
+        }
+      ],
+      "signatures": [
+        "scenario@09-ai-report#cancel-report",
+        "scenario@cancel-report-request#11"
+      ],
+      "first_seen": "2026-09-29T06:06:05",
+      "last_seen": "2026-09-29T06:09:02",
+      "title": "Cancel report request does nothing while an AI draft is being requested",
+      "severity": "high",
+      "category": "functional",
+      "expected": "Cancel report request stops waiting at once and the status bar says the request was cancelled (README promise).",
+      "actual": "The click is ignored until the provider answers.",
+      "suspected": [
+        "dt/ui.py: finalise_tab wires 'Cancel report request' through MainWindow.button -> run_action, which returns while busy()"
+      ],
+      "dt_test": "tests/desktop/test_ui.py: patch the report provider so the request blocks on a threading.Event, call draft_report, click the 'Cancel report request' button while busy() is true, and assert the status bar says the request was cancelled and a late reply is discarded.",
+      "scenario": "regressions/cancel-report-request",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "cancel-report-request"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ],
+      "aliases": [
+        "Cancel report request stops a slow AI draft request: step 11 (Click \"Cancel report request\") did not behave as expected"
+      ]
+    },
+    "JEV-0004": {
+      "id": "JEV-0004",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:08:51",
+          "result": "reproduced",
+          "reason": "step 8 (click): expected a status bar message containing 'cancelled'; the status bar said ['Checking this plate with NHVR. Cancel check stops waiting.']",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0004-cancel-registration-check"
+        }
+      ],
+      "signatures": [
+        "scenario@cancel-registration-check#8"
+      ],
+      "first_seen": "2026-09-29T06:08:41",
+      "last_seen": "2026-09-29T06:08:41",
+      "title": "Cancel registration check does nothing while the NHVR request is running",
+      "severity": "medium",
+      "category": "functional",
+      "expected": "Cancel registration check stops waiting at once and says so.",
+      "actual": "The click is ignored until NHVR answers.",
+      "suspected": [
+        "dt/ui.py: registration_rows connects every button, including Cancel registration check, through run_action, which returns while busy()",
+        "dt/registration.py: get_json blocks in opener.open for up to 15 s, so even a wired button would wait"
+      ],
+      "dt_test": "tests/desktop/test_vehicle_ui.py: patch registration.get_json (or the opener) to block, start an NHVR check, click 'Cancel registration check' and assert the status says cancelled within a second and no result is recorded.",
+      "scenario": "regressions/cancel-registration-check",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "cancel-registration-check"
+      ],
+      "aliases": [
+        "Cancel registration check stops a slow NHVR request: step 8 (Click \"Cancel registration check\") did not behave as expected"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ]
+    },
+    "JEV-0005": {
+      "id": "JEV-0005",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:09:19",
+          "result": "reproduced",
+          "reason": "step 8 (click): did not expect a message containing 'Select an imported file first'",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0005-evidence-selection-after-check"
+        }
+      ],
+      "signatures": [
+        "scenario@evidence-selection-after-check#8"
+      ],
+      "first_seen": "2026-09-29T06:09:19",
+      "last_seen": "2026-09-29T06:09:19",
+      "title": "After Check video file finishes, the file selection is cleared, so the next evidence action fails",
+      "severity": "medium",
+      "category": "ux",
+      "expected": "After the media check the same file stays selected and Watch video and mark assessment opens it.",
+      "actual": "The evidence list is rebuilt with nothing selected and the next button warns 'Select an imported file first'.",
+      "suspected": [
+        "dt/ui.py: MainWindow.analysis_complete -> refresh_sessions -> populate_session clears self.assets"
+      ],
+      "dt_test": "tests/desktop/test_ui.py: import a fixture video, select it in window.assets, run 'Check video file' and wait for analysis_complete, then assert window.assets.currentRow() still points at the same file.",
+      "scenario": "regressions/evidence-selection-after-check",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "evidence-selection-after-check"
+      ],
+      "aliases": [
+        "The checked file stays selected after Check video file: step 8 (Click \"Watch video and mark assessment\") did not behave as expected"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ]
+    },
+    "JEV-0006": {
+      "id": "JEV-0006",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:08:13",
+          "result": "reproduced",
+          "reason": "step 3 (type_text): expected a status bar message containing 'outside the active vault'; the status bar said ['Verifying encrypted records and evidence...', 'Operation failed. Check destination space, file access and evidence integrity.']",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0006-backup-error-reason"
+        }
+      ],
+      "signatures": [
+        "scenario@13-maintenance#backup-inside-vault",
+        "scenario@backup-error-reason#3"
+      ],
+      "first_seen": "2026-09-29T06:07:20",
+      "last_seen": "2026-09-29T06:08:12",
+      "title": "Backing up into the vault folder fails with a generic message that hides the reason",
+      "severity": "medium",
+      "category": "ux",
+      "expected": "The status says 'Choose a backup location outside the active vault'.",
+      "actual": "The status says 'Operation failed. Check destination space, file access and evidence integrity.'",
+      "suspected": [
+        "dt/ui.py: MaintenanceWorker.run replaces every exception with one generic message"
+      ],
+      "dt_test": "tests/desktop/test_ui.py: run MaintenanceWorker (or start_maintenance) with a backup folder inside the vault and assert the message shown contains 'outside the active vault'.",
+      "scenario": "regressions/backup-error-reason",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "backup-error-reason"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ],
+      "aliases": [
+        "A refused backup says why it was refused: step 3 (Type \"../vaults/seeded-vault\" into \"Path\" and press Enter) did not behave as expected"
+      ]
+    },
+    "JEV-0007": {
+      "id": "JEV-0007",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:09:23",
+          "result": "reproduced",
+          "reason": "step 3 (expect): None still contains 'Playback is not built into this version'",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0007-help-playback-text"
+        }
+      ],
+      "signatures": [
+        "scenario@help-playback-text#3"
+      ],
+      "first_seen": "2026-09-29T06:09:23",
+      "last_seen": "2026-09-29T06:09:23",
+      "title": "Help guide says video playback is not built in, but Evidence has in-app playback and clipping",
+      "severity": "medium",
+      "category": "copy",
+      "expected": "The 'Evidence and review copies' topic describes Watch video and mark assessment, clipping and Install FFmpeg for video features.",
+      "actual": "It says 'Watch the recording in your video player ... Playback is not built into this version.' and to ask support to configure FFmpeg.",
+      "suspected": [
+        "dt/help_guide.py: TOPICS['Evidence and review copies']"
+      ],
+      "dt_test": "tests/desktop/test_ui.py: assert TOPICS['Evidence and review copies'] does not say playback is missing, and that it names 'Watch video and mark assessment'.",
+      "scenario": "regressions/help-playback-text",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "help-playback-text"
+      ],
+      "aliases": [
+        "The help guide describes the in-app playback and FFmpeg install that Evidence offers: step 3 (Check the screen) did not behave as expected"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ]
+    },
+    "JEV-0008": {
+      "id": "JEV-0008",
+      "status": "open",
+      "classification": "confirmed bug",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:08:30",
+          "result": "reproduced",
+          "reason": "step 16 (click): did not expect a message containing 'Select an included module'",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0008-builder-restore-selection"
+        }
+      ],
+      "signatures": [
+        "scenario@12-module-builder#builder-restore-selection",
+        "scenario@builder-restore-selection#16"
+      ],
+      "first_seen": "2026-09-29T06:07:00",
+      "last_seen": "2026-09-29T06:08:30",
+      "title": "Module builder clears the module selection after excluding it, so Restore needs a reselect",
+      "severity": "low",
+      "category": "ux",
+      "expected": "The excluded module stays selected, so Restore selected module works at once.",
+      "actual": "The selection is cleared; Restore warns 'Select an included module in the Modules tab'.",
+      "suspected": [
+        "dt/assessment_ui.py: AssessmentBuilder.refresh rebuilds lists without restoring the current row"
+      ],
+      "dt_test": "tests/desktop/test_assessment_ui.py: select a module in the builder's module list, exclude it, assert the list keeps it selected, and assert 'Restore selected module' restores it without reselecting.",
+      "scenario": "regressions/builder-restore-selection",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "builder-restore-selection"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ],
+      "aliases": [
+        "Restore selected module works straight after excluding it: step 16 (Click \"Restore selected module\") did not behave as expected"
+      ]
+    },
+    "JEV-0009": {
+      "id": "JEV-0009",
+      "status": "open",
+      "classification": "ux issue",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:09:38",
+          "result": "reproduced",
+          "reason": "step 2 (type_text): did not expect a message containing 'Errno'; did not expect a message containing 'No such file or directory'",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0009-unlock-raw-os-error"
+        }
+      ],
+      "signatures": [
+        "text@dialog 'Could not open records'|matches errno d",
+        "scenario@unlock-raw-os-error#2",
+        "scenario@unlock-raw-os-error#5"
+      ],
+      "first_seen": "2026-09-29T06:09:37",
+      "last_seen": "2026-09-29T06:11:32",
+      "title": "The unlock dialog shows raw system errors ([Errno 2] No such file or directory, [Errno 36] File name too long)",
+      "severity": "medium",
+      "category": "copy",
+      "expected": "A plain message such as 'No vault in this folder. Tick Create a new vault to make one here.', or 'This folder name is too long'.",
+      "actual": "'Could not open records' shows Python's OSError text with the full path, e.g. [Errno 2] No such file or directory: '<folder>/vault.lock'.",
+      "suspected": [
+        "dt/ui.py: UnlockDialog.unlock shows str(error) for every exception, including OSError from Vault()"
+      ],
+      "dt_test": "tests/desktop/test_ui.py: UnlockDialog with a folder that does not exist and Create unticked: patch QMessageBox.warning, call unlock(), and assert the message does not contain 'Errno' and tells the user to tick Create or choose the vault folder.",
+      "scenario": "regressions/unlock-raw-os-error",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "unlock-raw-os-error"
+      ],
+      "aliases": [
+        "Technical error text shown to the user (dialog 'Could not open records')",
+        "Opening a folder that is not a vault explains what to do, without raw system errors: step 2 (Type \"jev-synthetic-passphrase-2026\" into \"Vault passphrase\" and press Enter) did not behave as expected",
+        "Opening a folder that is not a vault explains what to do, without raw system errors: step 5 (Type \"jev-synthetic-passphrase-2026\" into \"Vault passphrase\" and press Enter) did not behave as expected"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ]
+    },
+    "JEV-0010": {
+      "id": "JEV-0010",
+      "status": "open",
+      "classification": "ux issue",
+      "confidence": "confirmed",
+      "origin": "built-in regression scenario",
+      "created": "2026-09-29T06:08:08",
+      "status_history": [
+        {
+          "time": "2026-09-29T06:08:08",
+          "status": "open",
+          "by": "built-in",
+          "note": "Reproduced when the scenario was written."
+        }
+      ],
+      "verifications": [
+        {
+          "time": "2026-09-29T06:08:20",
+          "result": "reproduced",
+          "reason": "step 7 (click): did not expect a message containing 'moov atom'; did not expect a message containing '@ 0x'",
+          "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+          "branch": "HEAD",
+          "dirty": false,
+          "run": "<runs>/campaign-baseline/verify/JEV-0010-broken-video-raw-ffprobe"
+        }
+      ],
+      "signatures": [
+        "text@status bar|ffprobe could not read this file",
+        "scenario@broken-video-raw-ffprobe#7"
+      ],
+      "first_seen": "2026-09-29T06:05:11",
+      "last_seen": "2026-09-29T06:08:19",
+      "title": "Checking a damaged video shows raw FFprobe output (moov atom not found, memory addresses, internal paths)",
+      "severity": "medium",
+      "category": "copy",
+      "expected": "A plain message such as 'This file is not a playable video; it may be incomplete or damaged. Import the original recording again.', with the tool output kept for diagnostics.",
+      "actual": "The status bar shows 'FFprobe could not read this file: [mov,mp4,... @ 0x55e5...] moov atom not found <vault>/work/<id>.mp4: Invalid data found when processing input'.",
+      "suspected": [
+        "dt/media.py: probe_media raises MediaToolError('FFprobe could not read this file: ' + error_tail(stderr)), and the UI shows that text as is"
+      ],
+      "dt_test": "tests/test_media.py: make ffprobe fail on a random-bytes file and assert the MediaToolError text shown to users has no '@ 0x', no work-folder path and no 'moov atom'.",
+      "scenario": "regressions/broken-video-raw-ffprobe",
+      "verify_kind": "expectations",
+      "scenario_names": [
+        "broken-video-raw-ffprobe"
+      ],
+      "aliases": [
+        "Technical error text shown to the user (status bar)",
+        "Checking a damaged video explains the problem in plain language: step 7 (Click \"Check video file\") did not behave as expected"
+      ],
+      "dt_commits": [
+        "6ead5563ebbf"
+      ]
+    }
+  },
+  "assignments": {
+    "campaign-baseline/sweep/06-evidence#F001": "JEV-0010",
+    "campaign-baseline/sweep/09-ai-report#F001": "JEV-0003",
+    "campaign-baseline/sweep/12-module-builder#F001": "JEV-0008",
+    "campaign-baseline/sweep/13-maintenance#F001": "JEV-0006",
+    "campaign-baseline/verify/JEV-0006-backup-error-reason#F001": "JEV-0006",
+    "campaign-baseline/verify/JEV-0010-broken-video-raw-ffprobe#F001": "JEV-0010",
+    "campaign-baseline/verify/JEV-0010-broken-video-raw-ffprobe#F002": "JEV-0010",
+    "campaign-baseline/verify/JEV-0008-builder-restore-selection#F001": "JEV-0008",
+    "campaign-baseline/verify/JEV-0004-cancel-registration-check#F001": "JEV-0004",
+    "campaign-baseline/verify/JEV-0003-cancel-report-request#F001": "JEV-0003",
+    "campaign-baseline/verify/JEV-0005-evidence-selection-after-check#F001": "JEV-0005",
+    "campaign-baseline/verify/JEV-0007-help-playback-text#F001": "JEV-0007",
+    "campaign-baseline/verify/JEV-0001-mark-wheel-critical-failure#F001": "JEV-0001",
+    "campaign-baseline/verify/JEV-0002-truck-make-inline-completion#F001": "JEV-0002",
+    "campaign-baseline/verify/JEV-0009-unlock-raw-os-error#F001": "JEV-0009",
+    "campaign-baseline/verify/JEV-0009-unlock-raw-os-error#F002": "JEV-0009",
+    "campaign-baseline/verify/JEV-0009-unlock-raw-os-error#F003": "JEV-0009",
+    "campaign-baseline/crawl-none-r12#F001": "JEV-0009"
+  }
+}

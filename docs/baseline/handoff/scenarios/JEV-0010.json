@@ -1,0 +1,70 @@
+{
+  "name": "broken-video-raw-ffprobe",
+  "title": "Checking a damaged video explains the problem in plain language",
+  "issue": {
+    "id": "JEV-0010",
+    "title": "Checking a damaged video shows raw FFprobe output (moov atom not found, memory addresses, internal paths)",
+    "severity": "medium",
+    "category": "copy",
+    "classification": "ux issue",
+    "expected": "A plain message such as 'This file is not a playable video; it may be incomplete or damaged. Import the original recording again.', with the tool output kept for diagnostics.",
+    "actual": "The status bar shows 'FFprobe could not read this file: [mov,mp4,... @ 0x55e5...] moov atom not found <vault>/work/<id>.mp4: Invalid data found when processing input'.",
+    "dt_test": "tests/test_media.py: make ffprobe fail on a random-bytes file and assert the MediaToolError text shown to users has no '@ 0x', no work-folder path and no 'moov atom'.",
+    "signatures": [
+      "text@status bar|ffprobe could not read this file"
+    ],
+    "suspected": [
+      "dt/media.py: probe_media raises MediaToolError('FFprobe could not read this file: ' + error_tail(stderr)), and the UI shows that text as is"
+    ]
+  },
+  "app": {
+    "seed": "sample",
+    "network": "mock"
+  },
+  "steps": [
+    {
+      "do": "select_item",
+      "item": "Riley Ready"
+    },
+    {
+      "do": "select_tab",
+      "tab": "3 Evidence"
+    },
+    {
+      "do": "click",
+      "target": "Import original evidence",
+      "expect": {
+        "dialog": "file chooser"
+      }
+    },
+    {
+      "do": "type_text",
+      "target": "Path",
+      "text": "random-bytes.mp4",
+      "submit": "enter"
+    },
+    {
+      "do": "wait",
+      "seconds": 20,
+      "until": "idle"
+    },
+    {
+      "do": "select_item",
+      "item": "204,800 bytes",
+      "tab_hint": "3 Evidence"
+    },
+    {
+      "do": "click",
+      "target": "Check video file",
+      "wait_busy": 30,
+      "expect": {
+        "no_message": [
+          "moov atom",
+          "@ 0x",
+          "Invalid data found",
+          "FFprobe could not read"
+        ]
+      }
+    }
+  ]
+}

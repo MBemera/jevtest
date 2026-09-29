@@ -1,0 +1,8 @@
+text,kind,where,function,seen,origin,check,severity,detail,signature
+"{}
+{}
+SHA-256: {}{}
+{}",text,dt/ui.py:1626,MainWindow.show_asset,0,source,technical term,info,Uses 'SHA-256'; check the audience knows it.,
+NHVR rejected the request (HTTP 401). Check the subscription key and plate.,status bar,campaign-baseline/sweep/04-registration step 30,,1,screen,technical term,info,Uses 'HTTP 401'; check the audience knows it.,text@status bar|nhvr rejected the request http # check the subscription ke
+"Provider rejected the request (HTTP 429). Check model access, credentials and quota.",status bar,campaign-baseline/sweep/09-ai-report step 25,,1,screen,technical term,info,Uses 'HTTP 429'; check the audience knows it.,text@status bar|provider rejected the request http # check model access c
+Invalid assessment JSON,dialog message,campaign-baseline/sweep/12-module-builder step 63,,1,screen,technical term,info,Uses 'JSON'; check the audience knows it.,text@dialog 'Assessment scope'|invalid assessment json

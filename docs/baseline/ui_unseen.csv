@@ -1,0 +1,8 @@
+text,kind,file,line,function
+Install FFmpeg for video features,button,dt/ui.py,896,MainWindow.evidence_tab
+Could not create assessment,title,dt/ui.py,1095,MainWindow.create_session
+Could not create assessment,title,dt/ui.py,1168,MainWindow.create_from_directory
+Install FFmpeg,title,dt/ui.py,1643,MainWindow.install_ffmpeg
+Records stay locked,title,dt/ui.py,2011,MainWindow.unlock_records
+Import in progress,title,dt/ui.py,2057,MainWindow.closeEvent
+Unsaved edits retained,title,dt/ui.py,2061,MainWindow.closeEvent

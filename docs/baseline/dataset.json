@@ -1,0 +1,66 @@
+{
+  "built": "2026-09-29T06:15:41",
+  "jev": "0.1.0",
+  "seconds": 1.4,
+  "out": "<dataset>",
+  "roots": [
+    "<runs>"
+  ],
+  "dt": {
+    "checkout": "<DT>",
+    "current": {
+      "path": "<DT>",
+      "commit": "6ead5563ebbf10c6d16660a52a220082be29caf8",
+      "branch": "HEAD",
+      "dirty": false
+    },
+    "coverage_commit": "6ead5563ebbf10c6d16660a52a220082be29caf8"
+  },
+  "runs": {
+    "total": 30,
+    "by_kind": {
+      "crawl": 3,
+      "dt-tests": 1,
+      "scenario": 26
+    },
+    "cost": 0.0,
+    "dt_commits": {
+      "6ead5563ebbf": 30
+    }
+  },
+  "steps": 1363,
+  "findings": 18,
+  "issues": {
+    "total": 10,
+    "active": 10,
+    "by_status": {
+      "open": 10
+    },
+    "active_by_severity": {
+      "high": 3,
+      "medium": 6,
+      "low": 1
+    }
+  },
+  "code": {
+    "runs_with_coverage": 27,
+    "statements": 4725,
+    "hit": 3612,
+    "percent": 76.4,
+    "functions": 521,
+    "functions_run": 455,
+    "dt_tests": true
+  },
+  "ui": {
+    "controls": 304,
+    "used": 238,
+    "unlabelled": 10,
+    "labels_never_seen": 7
+  },
+  "copy": {
+    "problems": 0,
+    "term_conflicts": 4
+  },
+  "improvements": 65,
+  "notes": []
+}

@@ -24,7 +24,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from . import __version__
-from .config import dt_path, dt_version, runs_dir
+from .config import REPO_DIR, dt_path, dt_version, runs_dir
 from .dtsource import SourceIndex, known_limitations, normalise, parse_frames
 from .findings import SEVERITY_RANK, canonical_signature, text_signature
 from .registry import ACTIVE, Registry, dataset_dir, now
@@ -329,11 +329,14 @@ class DatasetBuilder:
         for issue_id, issue in self.registry.issues.items():
             findings = by_issue.get(issue_id, [])
             runs = sorted({finding["run"] for finding in findings})
+            # Replays that only re-check a known issue do not make it more widespread.
+            discovered = [run for run in runs if self.run_index.get(run, {}).get("group") not in ("verify", "regression")]
             reporters = sorted({finding.get("model") or finding.get("source") or "" for finding in findings} - {""})
             occurrences = sum(int(finding.get("occurrences") or 1) for finding in findings)
             best = best_finding(findings)
             row = dict(issue)
-            row.update(occurrences=occurrences, runs=len(runs), run_ids=runs[:50], reporters=reporters,
+            row.update(occurrences=occurrences, runs=len(runs), discovery_runs=len(discovered), run_ids=runs[:50],
+                       reporters=reporters,
                        steps=issue.get("minimal_steps") or best_steps(issue, best), evidence=best_evidence(findings),
                        code=self.locate(issue, findings, index), known_limitation=self.limitation_for(issue))
             row["score"] = issue_score(row)
@@ -862,7 +865,7 @@ def issue_score(issue):
     confidence = CONFIDENCE_WEIGHT.get(issue.get("confidence"), 0.7)
     if issue.get("classification") == "confirmed bug":
         confidence = 1.0
-    reach = 1 + math.log2(1 + max(1, issue.get("runs") or 1))
+    reach = 1 + math.log2(1 + max(1, issue.get("discovery_runs") or issue.get("runs") or 1))
     reporters = 1 + 0.25 * max(0, len(issue.get("reporters") or []) - 1)
     status = 1.3 if issue.get("status") == "regressed" else 1.0
     limitation = 0.3 if issue.get("known_limitation") else 1.0
@@ -1076,7 +1079,7 @@ def write_handoff(folder, issues, backlog, summary, index, run_index):
         scenario_path = ""
         if issue.get("scenario"):
             try:
-                scenario = load_scenario(issue["scenario"])
+                scenario = {key: value for key, value in load_scenario(issue["scenario"]).items() if key != "_path"}
                 target = folder / "scenarios" / f"{issue['id']}.json"
                 target.write_text(json.dumps(scenario, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
                 scenario_path = f"scenarios/{issue['id']}.json"
@@ -1238,7 +1241,11 @@ def export(dataset, target, *, max_screenshots=1, roots=None):
         raise FileNotFoundError(f"No dataset in {dataset}; run `jev dataset build` first")
     summary = json.loads((dataset / "dataset.json").read_text(encoding="utf-8"))
     replacements = [(str(Path(root).resolve()), "<runs>") for root in (roots or summary.get("roots") or [])]
-    replacements += [(str(dataset.resolve()), "<dataset>"), (str(Path.home()), "~")]
+    replacements += [(str(dataset.resolve()), "<dataset>"), (str(REPO_DIR), "<jev>")]
+    checkout = (summary.get("dt") or {}).get("checkout")
+    if checkout:
+        replacements.append((str(checkout), "<DT>"))
+    replacements.append((str(Path.home()), "~"))
     replacements.sort(key=lambda pair: -len(pair[0]))
 
     def clean(text):
