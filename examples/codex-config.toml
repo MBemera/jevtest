@@ -1,0 +1,9 @@
+# Add to ~/.codex/config.toml (Codex CLI / IDE extension) to give Codex the Jev MCP tools.
+# Use absolute paths; on Windows use the venv's Scripts\python.exe and forward or doubled slashes.
+[mcp_servers.jev]
+command = "/path/to/venv/bin/python"
+args = ["-m", "jev", "mcp"]
+env = { JEV_DT_PATH = "/path/to/DT", JEV_PYTHON = "/path/to/venv/bin/python" }
+startup_timeout_sec = 30
+# Tool calls that wait for the app (imports, media checks) can take up to ~60 s.
+tool_timeout_sec = 120
