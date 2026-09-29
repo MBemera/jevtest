@@ -9,6 +9,9 @@ from pathlib import Path
 
 from jev.config import dt_path, host_python
 
+# The suite runs DT headless even on a laptop with a screen; JEV_TEST_DISPLAY=window shows it instead.
+os.environ["JEV_DISPLAY"] = os.environ.get("JEV_TEST_DISPLAY", "headless")
+
 
 @lru_cache(maxsize=1)
 def app_available():

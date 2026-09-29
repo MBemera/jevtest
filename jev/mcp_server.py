@@ -51,7 +51,9 @@ EXTRA_SPECS = [
           "models": {"type": "string", "description": "AI tester models (IDs, presets or auto:N)."},
           "missions": {"type": "string", "description": "'gaps' (default), 'all' or a comma list."},
           "dt_tests": {"type": "boolean", "description": "Run DT's own test suites (default true)."},
-          "sweep": {"type": "boolean", "description": "Run the scripted sweep (default true)."}},
+          "sweep": {"type": "boolean", "description": "Run the scripted sweep (default true)."},
+          "display": {"type": "string", "description": "window (watch DT on screen) or headless. Default: the "
+                                                      "user's setting."}},
          audiences=("mcp",)),
     spec("campaign_status", "Progress of the latest (or a named) campaign; its report once finished.",
          {"campaign": {"type": "string", "description": "Optional campaign folder name."}}, audiences=("mcp",)),
@@ -251,6 +253,8 @@ class McpServer:
                           ("models", "--models"), ("missions", "--missions")):
             if arguments.get(key) not in (None, ""):
                 command += [flag, str(arguments[key])]
+        if arguments.get("display") in ("window", "headless"):
+            command.append("--" + arguments["display"])
         if arguments.get("dt_tests") is False:
             command.append("--no-dt-tests")
         if arguments.get("sweep") is False:
@@ -336,10 +340,19 @@ def main(argv=None):
     parser.add_argument("--seed", choices=["none", "empty", "sample"])
     parser.add_argument("--ffmpeg", choices=["auto", "none"])
     parser.add_argument("--idle-timeout-ms", type=int)
+    display = parser.add_mutually_exclusive_group()
+    display.add_argument("--window", "--visible", dest="display", action="store_const", const="window",
+                         help="show DT on screen so you can watch the agent test it")
+    display.add_argument("--headless", dest="display", action="store_const", const="headless",
+                         help="run DT without windows")
+    parser.add_argument("--pace", type=float, help="window mode: seconds each step is shown before it happens")
+    parser.add_argument("--allow-input", action="store_true", help="window mode: let your mouse and keyboard reach DT")
     args = parser.parse_args(argv)
     load_dotenv()
     options = {key: value for key, value in {"screen": args.screen, "network": args.network, "seed": args.seed,
-                                             "ffmpeg": args.ffmpeg, "idle_timeout_ms": args.idle_timeout_ms}.items()
+                                             "ffmpeg": args.ffmpeg, "idle_timeout_ms": args.idle_timeout_ms,
+                                             "display": args.display, "pace": args.pace,
+                                             "allow_input": args.allow_input or None}.items()
                if value is not None}
     McpServer(args.session_dir, options).serve()
     return 0

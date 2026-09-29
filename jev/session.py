@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from .client import HostClient, HostConnectionLost, HostError
-from .config import REPO_DIR, dt_path, dt_version, host_python, real_ffmpeg_tools
+from .config import REPO_DIR, display_available, dt_path, dt_version, host_python, real_ffmpeg_tools, resolve_display
 from .fixtures import describe_fixtures, install_fixtures
 
 SEED_PASSPHRASE = "jev-synthetic-passphrase-2026"
@@ -20,8 +20,10 @@ KEEP_ENV = {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_AL
             "PROCESSOR_ARCHITECTURE", "QT_SCALE_FACTOR", "QT_FONT_DPI", "FONTCONFIG_PATH", "FONTCONFIG_FILE",
             "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"}
 DEFAULTS = {"screen": "1366x768", "network": "block", "allow_hosts": [], "ffmpeg": "auto", "seed": "none",
-            "idle_timeout_ms": None, "visible": False, "stall_seconds": 1.5, "settle": 0.35, "wait_busy": 10.0,
-            "isolate_home": True, "unlock": True, "coverage": "auto"}
+            "idle_timeout_ms": None, "display": None, "pace": None, "allow_input": False, "label": "",
+            "stall_seconds": 1.5, "settle": 0.35, "wait_busy": 10.0, "isolate_home": True, "unlock": True,
+            "coverage": "auto"}
+WATCH_PACE = 0.5  # seconds each step stays highlighted on screen before it happens, in window mode
 
 
 class AppCrashed(Exception):
@@ -52,7 +54,12 @@ class AppSession:
         self.session_dir = Path(session_dir).resolve()
         self.sandbox = self.session_dir / "sandbox"
         self.options = dict(DEFAULTS)
+        if options.pop("visible", False):  # older name for window mode
+            options.setdefault("display", "window")
         self.options.update({key: value for key, value in options.items() if value is not None})
+        self.options["display"] = resolve_display(self.options.get("display"))
+        if self.options["pace"] is None:
+            self.options["pace"] = WATCH_PACE if self.options["display"] == "window" else 0.0
         self.owned = owned
         self.process = None
         self.client = None
@@ -81,6 +88,10 @@ class AppSession:
             "seed_folder": str(self.sandbox / "vaults" / "seeded-vault"),
             "exit_on_stdin_eof": self.owned,
             "coverage": self.options.get("coverage", "auto"),
+            "display": self.options["display"],
+            "pace": float(self.options["pace"] or 0),
+            "allow_input": bool(self.options.get("allow_input")),
+            "label": str(self.options.get("label") or ""),
         }
         (self.session_dir / "host-config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
@@ -98,8 +109,13 @@ class AppSession:
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
         env["PYTHONFAULTHANDLER"] = "1"
-        if not self.options["visible"]:
+        if self.options["display"] == "headless":
             env["QT_QPA_PLATFORM"] = "offscreen:configfile=.jev-screen.json"
+        elif os.name != "nt" and sys.platform != "darwin" and "XAUTHORITY" not in env:
+            # The sandbox gets its own HOME, so point X11 at the real user's display cookie.
+            cookie = Path.home() / ".Xauthority"
+            if cookie.exists():
+                env["XAUTHORITY"] = str(cookie)
         if self.options["isolate_home"]:
             home = self.sandbox / "home"
             env.update({"HOME": str(home), "USERPROFILE": str(home),
@@ -125,6 +141,10 @@ class AppSession:
 
     # ----- lifecycle --------------------------------------------------------------------
     def start(self, timeout=60.0):
+        if self.options["display"] == "window" and not display_available():
+            raise AppStartError("Window mode needs a desktop display, and none was found (DISPLAY and "
+                                "WAYLAND_DISPLAY are not set). Use --headless, or `jev display auto` to use "
+                                "window mode only when a desktop is available.")
         self.session_dir.mkdir(parents=True, exist_ok=True)
         self.prepare()
         for stale in ("ready.json", "exit.json"):
@@ -221,7 +241,13 @@ class AppSession:
 
     def restart(self, fresh=False, **overrides):
         self.stop()
+        if overrides.pop("visible", False):
+            overrides.setdefault("display", "window")
         self.options.update({key: value for key, value in overrides.items() if value is not None})
+        if overrides.get("display"):
+            self.options["display"] = resolve_display(self.options["display"])
+            if overrides.get("pace") is None:
+                self.options["pace"] = WATCH_PACE if self.options["display"] == "window" else 0.0
         if fresh:
             import shutil
             shutil.rmtree(self.sandbox, ignore_errors=True)
@@ -290,6 +316,8 @@ class AppSession:
             seed = json.loads(seed_file.read_text(encoding="utf-8") or "{}")
         tools = real_ffmpeg_tools() if self.options["ffmpeg"] == "auto" else {}
         return {
+            "display": self.options["display"] + (" (DT's windows are on screen)" if self.options["display"] == "window"
+                                                  else " (offscreen, no windows)"),
             "sandbox": str(self.sandbox),
             "vault_folders": str(self.sandbox / "vaults") + "  (create new vaults here, e.g. vaults/my-vault)",
             "exports": str(self.sandbox / "exports"),

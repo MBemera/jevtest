@@ -8,7 +8,7 @@ widget exists, across snapshots and across dialogs opening and closing.
 import weakref
 
 import shiboken6
-from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtCore import QModelIndex, QPoint, Qt
 from PySide6.QtWidgets import (
     QAbstractButton, QAbstractItemView, QAbstractScrollArea, QAbstractSlider, QAbstractSpinBox,
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFormLayout,
@@ -291,7 +291,8 @@ def name_of(widget, labels, role=None, strict=False):
 
 def ordered_children(widget):
     """Direct child widgets in reading order: layout order when there is one, else geometry."""
-    children = [child for child in widget.children() if isinstance(child, QWidget) and not child.isWindow()]
+    children = [child for child in widget.children() if isinstance(child, QWidget) and not child.isWindow()
+                and not child.property("jev_overlay")]
     if isinstance(widget, QSplitter):
         return [widget.widget(index) for index in range(widget.count())]
     layout = widget.layout()
@@ -672,7 +673,9 @@ class Snapshotter:
         elif role == "slider":
             value = widget.value()
         tab = containing_tab(widget)
+        corner = widget.mapToGlobal(QPoint(0, 0))
         return {"ref": node.ref or self.refs.of(widget), "role": role, "name": node.name, "depth": node.depth,
+                "rect": [corner.x(), corner.y(), widget.width(), widget.height()],
                 "enabled": widget.isEnabled(), "window": clean(window.windowTitle()), "window_role": role_of(window),
                 "tab": tab, "group": containing_group(widget), "interactive": not blocked,
                 "in_view": not widget.visibleRegion().isEmpty(), "value": value, "count": count,

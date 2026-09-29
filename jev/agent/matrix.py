@@ -7,13 +7,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
 
-from ..config import runs_dir
+from ..config import resolve_display, runs_dir
 from ..findings import cluster, load_run_findings, render_markdown
 from .openrouter import OpenRouter
 from .runner import QARun, RunConfig, slug
 
 
 def run_matrix(base, models, missions, personas, parallel=2, out_dir=None):
+    if parallel > 1 and resolve_display((base.app or {}).get("display")) == "window":
+        # Each app takes the focus before every action; several on one screen would disturb each other.
+        print("Window mode: running the testers one at a time so their windows do not take focus from each "
+              "other (use --headless to run them in parallel).", flush=True)
+        parallel = 1
     stamp = time.strftime("%Y%m%d-%H%M%S")
     root = Path(out_dir) if out_dir else runs_dir() / f"matrix-{stamp}"
     root.mkdir(parents=True, exist_ok=True)

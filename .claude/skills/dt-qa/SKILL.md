@@ -4,12 +4,14 @@ description: Use when asked to QA, test, explore, find bugs, UX problems or edge
 ---
 # QA the DT app with Jev
 
-Jev runs DT offscreen in a sandbox and exposes it as text snapshots plus real mouse/keyboard
+Jev runs DT in a sandbox (on screen with each step highlighted, or headless) and exposes it as text
+snapshots plus real mouse/keyboard
 actions. Everything here is synthetic data in a disposable sandbox.
 
 ## Drive it yourself (MCP tools from `.mcp.json`, or the `jev` CLI)
 - `app_start` with `seed` (`none` first run, `empty`, `sample` = 3 synthetic assessments),
-  `network` (`block` default, `mock` fake AI/NHVR/FFmpeg servers), `screen`, `idle_timeout_ms`.
+  `network` (`block` default, `mock` fake AI/NHVR/FFmpeg servers), `screen`, `idle_timeout_ms`, and
+  `display` (`window` when the user wants to watch, `headless` for background runs; default: their setting).
 - `snapshot` gives refs like `w12`; act with `click`, `type_text` (submit=tab to leave a field),
   `select_option`, `select_item` (lists/trees, action=activate/check), `select_tab`, `press_key`,
   `draw` (signature pad), `scroll`, `resize_window`, `close_window`, `wait` (until=idle).
@@ -34,7 +36,7 @@ actions. Everything here is synthetic data in a disposable sandbox.
 
 ## Triage
 Reproduce each finding, read the DT source to locate the cause, and classify it as confirmed bug,
-UX issue, by design, known limitation (see DT README) or harness artefact (offscreen rendering,
+UX issue, by design, known limitation (see DT README) or harness artefact (headless rendering,
 stand-in file chooser, blocked network, no audio/GPU). Record the decision with `set_issue`
 (`jev issues set`). Report confirmed items first with minimal steps, evidence paths and suspected
 code locations. For a confirmed new bug, add a regression scenario under

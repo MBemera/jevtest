@@ -6,6 +6,7 @@ nested event loops too, so the harness keeps working while a modal dialog is ope
 """
 
 import base64
+import contextlib
 import json
 import os
 import secrets
@@ -25,6 +26,7 @@ from . import audits
 from .actions import ActionError, Actions, InputScheduler, read_text
 from .describe import INPUT_ROLES, LabelIndex, Refs, Snapshotter, clean, is_popup, name_of, role_of
 from .monitor import main_thread_stack
+from .watch import Watch
 
 HANG_SECONDS = 20.0
 
@@ -33,7 +35,7 @@ class UiUnresponsive(Exception):
     pass
 
 
-INTERNAL_ARGUMENTS = {"action", "events_since", "snapshot", "settle", "wait_busy", "ref", "nodes"}
+INTERNAL_ARGUMENTS = {"action", "events_since", "snapshot", "settle", "wait_busy", "ref", "nodes", "jev_step"}
 
 
 def action_arguments(args):
@@ -93,6 +95,9 @@ class Host:
         self.snapshotter = Snapshotter(self.refs)
         self.scheduler = InputScheduler(log)
         self.actions = Actions(self.refs, self.snapshotter, self.scheduler, log)
+        # Window mode: show each step on screen before it happens, at a pace a person can follow.
+        self.watch = Watch(options.get("pace", 0.5), options.get("label", "")) \
+            if options.get("display") == "window" else None
         self.command_lock = threading.Lock()
         self.exited = None
         self.server = None
@@ -214,6 +219,9 @@ class Host:
         busy_wait = float(args.get("wait_busy", self.options.get("wait_busy", 10.0)))
         seq = int(args["events_since"]) if args.get("events_since") is not None else self.log.seq
         before = self.gui(lambda: id(QApplication.activeModalWidget()) if QApplication.activeModalWidget() else 0)
+        if self.watch is not None:
+            self.gui(lambda: self.announce(action, args))
+            time.sleep(self.watch.pace)  # the GUI keeps running and painting while this thread waits
         self.log.action = action
         try:
             def perform():
@@ -228,6 +236,8 @@ class Host:
             busy = self.wait_while_busy(busy_wait)
         finally:
             self.log.action = ""
+            if self.watch is not None:
+                self.gui(self.watch.fade_later)  # stays up until the next step, or a few seconds
         result = {"did": outcome.get("did", ""), "target": outcome.get("target"),
                   "notes": outcome.get("notes", []) + warnings,
                   "events": self.log.since(seq), "seq": self.log.seq, "still_busy": busy,
@@ -238,6 +248,74 @@ class Host:
                 result["snapshot"] = text
             result["nodes"] = nodes  # structured controls for traces and coverage; computed with the text anyway
         return result
+
+    # ----- window mode ------------------------------------------------------------------
+    def announce(self, action, args):
+        """Frame the control about to be used and say what is about to happen (GUI thread)."""
+        try:
+            widget = self.watch_target(action, args)
+        except Exception:  # noqa: BLE001 - the action itself reports bad targets
+            widget = None
+        self.watch.show(widget, self.caption(action, args, widget),
+                        window=QApplication.activeModalWidget() or self.main_window())
+
+    def watch_target(self, action, args):
+        named = args.get("ref") or args.get("name") or args.get("target")
+        if action == "select_tab" and not named:
+            return self.actions.find_tab_widget(args.get("tab"))
+        if action == "press_key" and not named:
+            return QApplication.focusWidget()
+        if action in ("close_window", "resize") and not named:
+            return QApplication.activeModalWidget() or QApplication.activeWindow()
+        if action == "select_item" and not named and args.get("item") is not None:
+            return self.actions.list_showing(args["item"], args.get("tab_hint"))
+        if not named:
+            return None
+        roles = {"select_option": ["combobox"], "set_checked": ["checkbox", "radio", "button"],
+                 "select_item": ["list", "tree", "table"], "select_tab": ["tabs"], "draw": ["canvas", "container"],
+                 "set_value": ["slider", "spinbox"]}.get(action)
+        return self.actions.resolve_widget(args, roles)
+
+    def caption(self, action, args, widget):
+        name = ""
+        if widget is not None:
+            try:
+                name = self.snapshotter.target_info(widget).get("name") or ""
+            except Exception:  # noqa: BLE001 - a caption must never break an action
+                name = ""
+        name = clean(name or args.get("name") or "")[:50]
+        quoted = f'"{name}"' if name else ("the list" if action == "select_item" else "the control")
+        if action == "type_text":
+            text = str(args.get("text", ""))
+            if isinstance(widget, QLineEdit) and widget.echoMode() != QLineEdit.EchoMode.Normal:
+                text = "\u2022" * min(len(text), 8)
+            shown = text if len(text) <= 40 else text[:39] + "\u2026"
+            what = f'Type "{shown}" into {quoted}'
+        elif action == "select_option":
+            what = f'Choose "{args.get("option")}" in {quoted}'
+        elif action == "set_checked":
+            what = f"{'Tick' if args.get('checked', True) else 'Untick'} {quoted}"
+        elif action == "select_item":
+            what = f'{str(args.get("mode") or "select").capitalize()} "{args.get("item")}" in {quoted}'
+        elif action == "select_tab":
+            what = f'Open the "{args.get("tab")}" tab'
+        elif action == "press_key":
+            what = f"Press {args.get('keys') or args.get('key')}" + (f" in {quoted}" if name else "")
+        elif action == "draw":
+            what = f"Draw on {quoted}"
+        elif action == "scroll":
+            what = f"Scroll {args.get('direction') or 'down'} in {quoted}"
+        elif action == "set_value":
+            what = f"Set {quoted} to {args.get('value')}"
+        elif action == "close_window":
+            what = f"Close {quoted if name else 'the window'}"
+        elif action == "resize":
+            what = f"Resize the window to {args.get('width')}x{args.get('height')}"
+        else:
+            what = f"Click {quoted}"
+        prefix = "Jev" + (f" \u00b7 {self.watch.label}" if self.watch.label else "") + \
+            (f" \u00b7 step {args['jev_step']}" if args.get("jev_step") else "")
+        return f"{prefix}: {what}"
 
     def wait_for_input(self, sequence, modal_before, timeout=6.0):
         if sequence is None:
@@ -268,6 +346,10 @@ class Host:
         seq = int(args["events_since"]) if args.get("events_since") is not None else self.log.seq
         until = (args.get("until") or "").lower()
         deadline = time.monotonic() + seconds
+        if self.watch is not None and seconds >= 1:
+            reason = {"idle": "for DT to finish", "dialog": "for a dialog"}.get(until, "")
+            self.gui(lambda: self.watch.show(None, f"Jev: waiting {reason} (up to {seconds:g} s)".replace("  ", " "),
+                                             window=QApplication.activeModalWidget() or self.main_window()))
         while time.monotonic() < deadline:
             time.sleep(0.1)
             if until == "idle" and not self.gui(self.app_busy):
@@ -387,28 +469,31 @@ class Host:
             "locked": bool(getattr(window, "locked", False)) if window is not None else None,
             "tab": tab,
             "screen": "main window" if window is not None else ("unlock dialog" if modal else "none"),
+            "display": "window" if self.watch is not None else "headless",
+            "highlight": self.watch.caption if self.watch is not None and self.watch.showing() else "",
         }
 
     # ----- screenshots ----------------------------------------------------------------
     def screenshot(self, ref=None, marks=False, max_width=1600):
-        if ref:
-            widget = self.refs.find(ref)
-            if widget is None:
-                raise ActionError(f"No widget with reference {ref}.")
-            pixmap = widget.grab()
-            origin = widget.mapToGlobal(QPoint(0, 0))
-            windows = [widget]
-        else:
-            screen = QApplication.primaryScreen().geometry()
-            pixmap = QPixmap(screen.size())
-            pixmap.fill(QColor("#2e3440"))
-            painter = QPainter(pixmap)
-            windows = self.snapshotter.windows()
-            popup = QApplication.activePopupWidget()
-            for window in windows + ([popup] if popup is not None else []):
-                painter.drawPixmap(window.geometry().topLeft() - screen.topLeft(), window.grab())
-            painter.end()
-            origin = screen.topLeft()
+        with (self.watch.hidden_for_capture() if self.watch is not None else contextlib.nullcontext()):
+            if ref:
+                widget = self.refs.find(ref)
+                if widget is None:
+                    raise ActionError(f"No widget with reference {ref}.")
+                pixmap = widget.grab()
+                origin = widget.mapToGlobal(QPoint(0, 0))
+                windows = [widget]
+            else:
+                screen = QApplication.primaryScreen().geometry()
+                pixmap = QPixmap(screen.size())
+                pixmap.fill(QColor("#2e3440"))
+                painter = QPainter(pixmap)
+                windows = self.snapshotter.windows()
+                popup = QApplication.activePopupWidget()
+                for window in windows + ([popup] if popup is not None else []):
+                    painter.drawPixmap(window.geometry().topLeft() - screen.topLeft(), window.grab())
+                painter.end()
+                origin = screen.topLeft()
         if marks:
             self.draw_marks(pixmap, windows, origin)
         if pixmap.width() > max_width:

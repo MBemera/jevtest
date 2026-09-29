@@ -75,10 +75,15 @@ def main(argv=None):
         def __init__(self, argv):
             super().__init__(argv)
             self.installEventFilter(observer)
+            if config.get("display") == "window" and not config.get("allow_input"):
+                # DT is on the real screen: a stray click or keystroke from the laptop's user must not
+                # change the run. Jev's own input bypasses the guard.
+                from .watch import install_input_guard
+                self._jev_guard = install_input_guard(host.scheduler, log)
             self._jev_heartbeat = install_heartbeat(watchdog)
             watchdog.start()
             host.attach()
-            log.emit("app", phase="started", pid=os.getpid())
+            log.emit("app", phase="started", pid=os.getpid(), display=config.get("display", "headless"))
 
     dt.ui.QApplication = HarnessApplication
     # Measure only what testers make DT do: seeding and imports ran before this point.

@@ -1,5 +1,6 @@
 """Locations and settings shared by the CLI, the MCP server and the agent runner."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -45,6 +46,59 @@ def state_dir():
     base = Path(configured).expanduser() if configured else Path.home() / ".jev"
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+# ----- display: watch DT on screen, or run it headless ------------------------------------
+DISPLAY_ALIASES = {"window": "window", "windowed": "window", "visible": "window", "screen": "window",
+                   "gui": "window", "headless": "headless", "offscreen": "headless", "hidden": "headless",
+                   "auto": "auto"}
+
+
+def settings_path():
+    return state_dir() / "settings.json"
+
+
+def load_settings():
+    try:
+        return json.loads(settings_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_setting(key, value):
+    settings = load_settings()
+    if value is None:
+        settings.pop(key, None)
+    else:
+        settings[key] = value
+    settings_path().write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+
+
+def display_available():
+    """Whether this machine has a desktop that DT's windows can appear on."""
+    if sys.platform in ("win32", "darwin"):
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def display_setting(requested=None):
+    """The chosen mode and where it came from: an option, $JEV_DISPLAY, `jev display`, or the default."""
+    for value, source in ((requested, "option"), (os.environ.get("JEV_DISPLAY"), "JEV_DISPLAY"),
+                          (load_settings().get("display"), f"jev display ({settings_path()})")):
+        if value:
+            mode = DISPLAY_ALIASES.get(str(value).strip().lower())
+            if mode is None:
+                raise ValueError(f"Unknown display mode {value!r} from {source}; use window, headless or auto")
+            return mode, source
+    return "auto", "default"
+
+
+def resolve_display(requested=None):
+    """window or headless. auto means window when a desktop is available, else headless."""
+    mode, _ = display_setting(requested)
+    if mode == "auto":
+        return "window" if display_available() else "headless"
+    return mode
 
 
 def dt_path():

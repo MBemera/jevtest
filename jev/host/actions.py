@@ -11,7 +11,7 @@ import traceback
 
 import shiboken6
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QTimer
-from PySide6.QtGui import QKeyEvent, QKeySequence, QWheelEvent
+from PySide6.QtGui import QKeyEvent, QKeySequence, QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QAbstractButton, QAbstractItemView, QAbstractScrollArea, QAbstractSlider, QApplication, QCheckBox,
@@ -55,6 +55,7 @@ class InputScheduler:
     def __init__(self, log):
         self.log = log
         self.last = None
+        self.injecting = 0  # >0 while a step runs, so the input guard can let Jev's own shortcuts through
 
     def run(self, steps, label):
         sequence = Sequence(label, steps)
@@ -70,6 +71,7 @@ class InputScheduler:
                 return
             step = sequence.steps[sequence.index]
             sequence.index += 1
+            self.injecting += 1
             try:
                 step()
             except Exception as error:  # a harness-side failure, not an app bug
@@ -77,10 +79,23 @@ class InputScheduler:
                 self.log.emit("harness_error", action=label, error=repr(error),
                               traceback=traceback.format_exc(limit=6))
                 return
+            finally:
+                self.injecting -= 1
             QTimer.singleShot(0, advance)
 
         QTimer.singleShot(0, advance)
         return sequence
+
+
+def drag_to(widget, point):
+    """Move with the left button held, sent to the widget itself.
+
+    QTest.mouseMove moves the real pointer through the window system, which would take over the
+    user's mouse in window mode; a direct event draws the same stroke in both modes.
+    """
+    event = QMouseEvent(QEvent.Type.MouseMove, QPointF(point), QPointF(widget.mapToGlobal(point)),
+                        Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(widget, event)
 
 
 def normalise(text):
@@ -694,7 +709,7 @@ class Actions:
             scaled = [QPoint(int(x * (width - 1)), int(y * (height - 1))) for x, y in stroke]
             steps.append(lambda first=scaled[0]: QTest.mousePress(handle.get(), LEFT, NO_MODIFIER, first))
             for point in scaled[1:]:
-                steps.append(lambda point=point: QTest.mouseMove(handle.get(), point))
+                steps.append(lambda point=point: drag_to(handle.get(), point))
             steps.append(lambda last=scaled[-1]: QTest.mouseRelease(handle.get(), LEFT, NO_MODIFIER, last))
         self.activate(widget)
         self.scheduler.run(steps, f"draw on {self.describe(widget)}")

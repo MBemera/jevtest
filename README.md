@@ -4,7 +4,9 @@ Jev lets AI testers use [DT](../DT) the way a trainer would, looking for user-ex
 bugs and edge cases. DT is the offline PySide6 driver-training and assessment app. The testers can
 be Claude Code, Codex, or any tool-calling model on OpenRouter.
 
-- DT runs unchanged in its own process, offscreen, inside a disposable sandbox with synthetic data.
+- DT runs unchanged in its own process, inside a disposable sandbox with synthetic data. You can
+  **watch it on screen** (window mode: each step is highlighted before it happens) or run it
+  **headless** (no windows).
 - The harness turns the live Qt widget tree into a compact text **snapshot**. Every control gets a
   stable ref such as `w12`, with its role, label, value and state.
 - **Actions** are real mouse and keyboard events. An action cannot touch a control that is hidden,
@@ -29,7 +31,8 @@ be Claude Code, Codex, or any tool-calling model on OpenRouter.
  jev CLI (any agent's shell) ───────┤                  │ control server → Qt GUI thread        │
  jev run / matrix (OpenRouter) ─────┼─> tools.py ──TCP─┤ snapshot · actions · monitors · guards│
  jev sweep / scenario / crawl ──────┘   steps.jsonl     │ coverage probe                        │
-        │                               findings        │ DT: dt.ui.main() unchanged, offscreen │
+        │                               findings        │ DT: dt.ui.main() unchanged, on screen │
+        │                                               │ with highlights, or headless          │
         │                                               └───────────────────────────────────────┘
  jev campaign ── runs all of the above + DT's own tests ──> jev dataset build ──> registry, backlog,
                                                             jev verify               handoff for DT
@@ -44,7 +47,7 @@ Install everything into one virtual environment:
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\Activate.ps1
 python -m pip install -e "../DT[desktop]" -e .
-jev doctor                           # checks DT, Qt offscreen start, FFmpeg, OpenRouter key
+jev doctor                           # checks DT, Qt (headless and on screen), FFmpeg, OpenRouter key
 ```
 
 - **Linux** also needs the Qt system libraries DT lists:
@@ -55,6 +58,38 @@ jev doctor                           # checks DT, Qt offscreen start, FFmpeg, Op
 
 If DT already has its own `.venv`, Jev uses it for the app process automatically. You can also
 set `JEV_PYTHON` to that interpreter.
+
+## Watch the testing on screen, or run headless
+
+By default DT opens **on your screen** whenever a desktop is available, such as a laptop. On a
+server or in CI it runs headless. In window mode:
+
+- **Highlights:** before each step, Jev draws a frame around the control it is about to use, with
+  a caption such as `Jev · 03-prepare · step 8: Choose "HC - Heavy Combination" in "Licence
+  class"`. The step then waits half a second so you can follow it, and waits are captioned too.
+- **Your input is ignored:** while Jev drives DT, your own mouse clicks and keystrokes in DT's
+  windows are ignored, so a stray click cannot change a test. Moving and resizing the windows still
+  works. Closing DT's window ends that app, so stop a run with Ctrl+C in the terminal instead.
+- **Clean evidence:** Jev's own screenshots and snapshots never include the highlight.
+
+```bash
+jev display                      # which mode is in use, and why
+jev display headless             # switch for good (saved in ~/.jev/settings.json)
+jev display window               # back to watching (or `auto`: window when a desktop exists)
+jev sweep --headless             # just this command, without windows
+jev crawl --window --pace 1      # just this command, on screen, one step per second
+jev campaign --window --pace 0   # on screen at full speed
+jev start --window --allow-input # drive it yourself too: your mouse and keyboard reach DT
+```
+
+`JEV_DISPLAY=window|headless` (in the shell or in `.env`) overrides the saved setting, and
+`--window` or `--headless` override both. The MCP server follows the same setting.
+`app_start` and `run_campaign` also take `display: "window" | "headless"`, so you can ask Claude
+Code to "show me" or "run it in the background".
+
+Headless is faster and suits long campaigns and parallel AI testers. In window mode, AI testers run
+one at a time, because each app takes the focus before every step. DT's own unit tests, which
+campaigns run first, are always headless.
 
 ## Run everything and build the improvement dataset
 
@@ -163,7 +198,12 @@ found four real DT issues.
 | `--screen` | `1366x768` (default), `1024x768`, `2560x1440@2`, ... |
 | `--idle-timeout-ms` | shortens DT's 5-minute idle lock |
 | `--ffmpeg` | `none` hides FFmpeg from DT |
-| `--visible` | shows real windows so you can watch |
+| `--window` / `--headless` | on screen with highlighted steps (default when a desktop exists) / no windows |
+| `--pace` | window mode: seconds each step is highlighted before it happens (default 0.5) |
+| `--allow-input` | window mode: let your own mouse and keyboard reach DT as well |
+
+These options work on every command that starts DT: `start`, `run`, `matrix`, `scenario`, `sweep`,
+`crawl`, `verify`, `minimise` and `campaign`.
 
 ## Use it from Claude Code
 
@@ -262,9 +302,12 @@ These tools are shared by MCP and the OpenRouter agent; the CLI has the same com
 
 ## Known limits of the harness
 
-- **Offscreen rendering:** fonts and styles are close to Linux desktops but not identical to
+- **Headless rendering:** fonts and styles are close to Linux desktops but not identical to
   Windows or macOS, and video frames are not drawn, although playback, position and clipping work.
-  Confirm pixel-level issues on a real desktop, for example with `--visible`.
+  Confirm pixel-level issues in window mode (`--window`), which uses the real desktop.
+- **Window mode timing:** before each step Jev brings DT's window to the front. On Windows the system
+  may only flash the taskbar button instead. Either way, use the laptop for other things while a
+  window-mode run is going, and switch to `--headless` for long unattended campaigns.
 - **File dialogs:** native file dialogs are replaced by a sandbox-limited chooser. Native dialog
   behaviour is out of scope.
 - **Audit:** the layout and accessibility checks are heuristics, so confirm them with a
@@ -279,14 +322,19 @@ These tools are shared by MCP and the OpenRouter agent; the CLI has the same com
   live list (tool calling, a large enough context, one per provider). Presets are a fallback and
   can go stale; `jev models --pick auto:3` shows what would be chosen.
 - **Windows:** paths, long file names and console encoding are handled (output is UTF-8; the
-  offscreen screen config uses a relative path because drive letters break Qt's platform
+  headless screen config uses a relative path because drive letters break Qt's platform
   string). The integration tests have run on Linux; please report anything Windows-specific.
 
 ## Development
 
 ```bash
-python -m unittest discover -s tests -v    # the integration tests start the real app offscreen
+python -m unittest discover -s tests -v    # the integration tests start the real app headless
+JEV_TEST_DISPLAY=window python -m unittest discover -s tests -v   # the same, on screen
 ```
+
+`tests/test_window.py` checks window mode itself: highlights, clean screenshots, and ignoring
+real clicks. It needs a desktop display. On a Linux server, run `Xvfb :99 &` with `DISPLAY=:99`,
+and install `xdotool` for the real-click test.
 
 - **Main modules:**
   - `jev/host/` runs inside the app: `describe.py` makes snapshots, `actions.py` sends input,

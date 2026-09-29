@@ -34,12 +34,12 @@ def session_root(name, fresh=False):
 
 def app_options(args):
     options = {}
-    for key in ("screen", "network", "seed", "ffmpeg", "idle_timeout_ms", "coverage"):
+    for key in ("screen", "network", "seed", "ffmpeg", "idle_timeout_ms", "coverage", "display", "pace"):
         value = getattr(args, key, None)
         if value is not None:
             options[key] = value
-    if getattr(args, "visible", False):
-        options["visible"] = True
+    if getattr(args, "allow_input", False):
+        options["allow_input"] = True
     if getattr(args, "allow_host", None):
         options["allow_hosts"] = args.allow_host
     return options
@@ -185,6 +185,21 @@ def cmd_doctor(args):
         print("  " + "\n  ".join(result.stderr.strip().splitlines()[-8:]))
         print("  Install DT into that interpreter: python -m pip install -e \"<DT>[desktop]\"; on Linux also "
               "install libegl1 libopengl0 libxkbcommon0 libpulse0 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0")
+    from .config import display_available, display_setting, resolve_display
+    mode, source = display_setting()
+    display = resolve_display()
+    print(f"Display: {display} ({describe_display(display)}; setting '{mode}' from {source})")
+    if display == "window":
+        windowed = {key: value for key, value in environment.items() if key != "QT_QPA_PLATFORM"}
+        result = subprocess.run([python, "-c", code], capture_output=True, text=True, env=windowed, timeout=120)
+        if result.returncode == 0:
+            print("Qt start on this screen: OK - DT's windows will appear while Jev tests it")
+        else:
+            ok = False
+            print("Qt start on this screen: FAILED - use --headless or `jev display headless`")
+            print("  " + "\n  ".join(result.stderr.strip().splitlines()[-6:]))
+    elif not display_available():
+        print("  (no desktop display here, so window mode is not available)")
     tools = real_ffmpeg_tools()
     print(f"FFmpeg for video fixtures and DT media checks: "
           f"{tools.get('ffmpeg', 'not found')} / {tools.get('ffprobe', 'not found')}")
@@ -381,6 +396,27 @@ def cmd_crawl(args):
     return 0
 
 
+def cmd_display(args):
+    from .config import display_available, display_setting, resolve_display, save_setting, settings_path
+    if args.mode:
+        save_setting("display", None if args.mode == "auto" else args.mode)
+        print(f"Saved: DT will run {describe_display(args.mode)} by default ({settings_path()}).")
+        if os.environ.get("JEV_DISPLAY"):
+            print(f"Note: JEV_DISPLAY={os.environ['JEV_DISPLAY']} is set and takes precedence in this shell.")
+    mode, source = display_setting()
+    print(f"Display: {resolve_display()} - {describe_display(resolve_display())} "
+          f"(setting '{mode}' from {source}; a desktop display is {'available' if display_available() else 'not available'}).")
+    print("Change it for one command with --window or --headless, for this shell with JEV_DISPLAY=window|headless, "
+          "or for good with `jev display window|headless|auto`.")
+    return 0
+
+
+def describe_display(mode):
+    return {"window": "in a window on your screen, highlighting each step",
+            "headless": "headless, without windows",
+            "auto": "in a window when a desktop display is available, otherwise headless"}.get(mode, mode)
+
+
 def cmd_dataset(args):
     from .dataset import build
     from .registry import dataset_dir
@@ -571,6 +607,16 @@ def add_app_options(parser):
     parser.add_argument("--idle-timeout-ms", type=int, dest="idle_timeout_ms", help="override DT's 5 minute idle lock")
     parser.add_argument("--coverage", choices=["auto", "on", "off"],
                         help="measure which DT code runs (auto = with coverage.py when installed)")
+    display = parser.add_mutually_exclusive_group()
+    display.add_argument("--window", "--visible", dest="display", action="store_const", const="window",
+                         help="show DT on screen and highlight each step, so you can watch the test")
+    display.add_argument("--headless", dest="display", action="store_const", const="headless",
+                         help="run DT without windows (faster; for servers, CI and parallel runs)")
+    parser.add_argument("--pace", type=float,
+                        help="window mode: seconds each step is highlighted before it happens (default 0.5; 0 = full "
+                             "speed)")
+    parser.add_argument("--allow-input", action="store_true",
+                        help="window mode: let your own mouse and keyboard reach DT during the run")
 
 
 def add_agent_options(parser):
@@ -602,8 +648,10 @@ def build_parser():
     item.add_argument("--online", action="store_true", help="also contact OpenRouter")
     item = command("start", cmd_start, "start the sandboxed app in the background")
     add_app_options(item)
-    item.add_argument("--visible", action="store_true", help="show real windows instead of offscreen rendering")
     item.add_argument("--fresh", action="store_true", help="new session folder and sandbox")
+    item = command("display", cmd_display, "show or set whether DT runs on screen (window) or headless")
+    item.add_argument("mode", nargs="?", choices=["window", "headless", "auto"],
+                      help="window = watch on screen, headless = no windows, auto = window when a display exists")
     command("stop", cmd_stop, "stop the background app")
     item = command("restart", cmd_restart, "restart the app, keeping the sandbox unless --fresh")
     add_app_options(item)
@@ -811,10 +859,14 @@ def main(argv=None):
         return mcp_main(argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
+    from .session import AppStartError
     try:
         return args.handler(args) or 0
     except KeyboardInterrupt:
         return 130
+    except AppStartError as error:
+        print(f"Could not start DT: {error}", file=sys.stderr)
+        return 1
     except BrokenPipeError:  # e.g. `jev issues | head`
         try:
             sys.stdout = open(os.devnull, "w", encoding="utf-8")

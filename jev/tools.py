@@ -156,6 +156,8 @@ TOOL_SPECS = [
                                                    "sample (unlocked vault with three synthetic assessments)."},
           "ffmpeg": {"type": "string", "description": "auto (default) or none (hide FFmpeg from DT)."},
           "idle_timeout_ms": {"type": "integer", "description": "Override the 5 minute idle auto-lock."},
+          "display": {"type": "string", "description": "window (DT on the screen, so the user can watch) or "
+                                                      "headless (no windows). Default: the user's setting."},
           "fresh": {"type": "boolean", "description": "Start from an empty sandbox."}}, audiences=("mcp",)),
     spec("app_stop", "Stop the sandboxed DT app.", audiences=("mcp",)),
     spec("findings", "List the findings recorded in this session (reported issues and harness detections).",
@@ -210,9 +212,22 @@ class ToolRunner:
     # ----- app lifecycle ----------------------------------------------------------------
     def ensure_app(self):
         if self.session is None:
-            self.session = AppSession(self.session_dir / "app", **self.app_options)
+            options = dict(self.app_options)
+            options.setdefault("label", self.watch_label())
+            self.session = AppSession(self.session_dir / "app", **options)
             self.session.start()
         return self.session
+
+    def watch_label(self):
+        """Who is driving, shown with each step when DT is on screen (window mode)."""
+        context = self.store.context
+        mission, model = context.get("mission"), context.get("model")
+        parts = [mission] if mission else []
+        if model and model not in ("scenario", "crawler", "cli"):
+            parts.append(model)
+        elif model == "crawler":
+            parts.append(context.get("persona") or "")
+        return " \u00b7 ".join(part for part in parts if part)
 
     def stop(self):
         if self.session is not None:
@@ -273,6 +288,7 @@ class ToolRunner:
             host_args["mode"] = host_args.pop("action")
         if "target" in host_args and "ref" not in host_args:
             host_args["ref"] = host_args["target"]
+        host_args["jev_step"] = self.step
         if action == "draw" and isinstance(host_args.get("strokes"), str):
             try:
                 host_args["strokes"] = json.loads(host_args["strokes"])
@@ -393,7 +409,7 @@ class ToolRunner:
                                                      ", keeping the sandbox") + ".\n\n" + self.clip(snapshot["text"]))
 
     def tool_app_start(self, args):
-        options = {key: args.get(key) for key in ("screen", "network", "seed", "ffmpeg", "idle_timeout_ms")
+        options = {key: args.get(key) for key in ("screen", "network", "seed", "ffmpeg", "idle_timeout_ms", "display")
                    if args.get(key) is not None}
         self.app_options.update(options)
         if self.session is not None:

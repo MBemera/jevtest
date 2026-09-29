@@ -8,13 +8,19 @@ through `CLAUDE.md`; Codex reads it directly.
 ## Setup check (do this first)
 
 ```bash
-jev doctor            # DT checkout, Qt offscreen start, FFmpeg, OPENROUTER_API_KEY
+jev doctor            # DT checkout, Qt start (headless and on screen), FFmpeg, OPENROUTER_API_KEY
 jev doctor --online   # also checks OpenRouter reachability and the key
 ```
 
 If `jev` is not on PATH, use `python -m jev ...` from this repository. `JEV_DT_PATH` points at the
 DT checkout (default `../DT`); `JEV_PYTHON` at an interpreter with DT's desktop extra installed
 (default: DT's `.venv`, else the current interpreter).
+
+Display: on a machine with a desktop, DT opens on screen (window mode) so the user can watch;
+each step is highlighted first, and the user's own clicks and keys in DT are ignored. `jev display`
+shows the setting. Pass `--headless` (or MCP `display: "headless"`) when the user wants runs in
+the background, and `--window` when they ask to see it. Do not pass `--allow-input` unless the user
+asks to use DT alongside Jev.
 
 ## Ways to test
 
@@ -63,7 +69,7 @@ DT checkout (default `../DT`); `JEV_PYTHON` at an interpreter with DT's desktop 
    DT source (`../DT/src/dt/ui.py` and friends) helps confirm the cause.
 3. Classify: **confirmed bug**, **UX issue**, **by design** (documented in DT's README), **known
    limitation** (DT README "Not implemented"/"Known limitations"), or **harness artefact**
-   (offscreen rendering, the stand-in file chooser, blocked network, missing audio/GPU).
+   (headless rendering, the stand-in file chooser, blocked network, missing audio/GPU).
 4. Record each decision: `jev issues set JEV-0105 --status by-design --note "README says ..."`
    (or `--classification "ux issue"`, `--duplicate-of JEV-0003`). The MCP `set_issue` tool does the same.
 5. Write the final QA report: confirmed items first, each with minimal repro steps, expected vs
@@ -92,4 +98,6 @@ against that DT commit; if it comes back later it is marked regressed. Never edi
   scenario that checks the correct behaviour; `jev scenario record <run> --until <step>` gives a start.
 - `jev/scenarios.py`, `jev/crawler.py`, `jev/campaign.py`, `jev/dataset.py`, `jev/registry.py`,
   `jev/verify.py`, `jev/triage.py`, `jev/dtsource.py`: see docs/dataset.md.
-- Tests: `python -m unittest discover -s tests` (integration tests start the real app offscreen).
+- `jev/host/watch.py` is window mode: the step highlight and the guard against the user's own input.
+- Tests: `python -m unittest discover -s tests` (integration tests start the real app headless;
+  `tests/test_window.py` needs a display).
