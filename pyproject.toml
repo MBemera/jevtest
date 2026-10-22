@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jev-qa"
-version = "0.1.0"
+version = "0.1.1"
 description = "AI-driven QA harness for the DT desktop app (Claude Code, Codex and OpenRouter testers)"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["truststore>=0.10.5,<1.0"]
 
 [project.optional-dependencies]
 # The app process needs DT and PySide6; install DT itself with: pip install -e "../DT[desktop]"

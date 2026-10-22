@@ -801,7 +801,15 @@ def utf8_output():
                 pass
 
 
+def use_system_trust_store():
+    """Verify TLS with the OS trust store: Python's ssl module ignores the Windows untrusted-certificate list."""
+    import truststore
+
+    truststore.inject_into_ssl()
+
+
 def main(argv=None):
+    use_system_trust_store()
     load_dotenv()
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] != ["mcp"]:

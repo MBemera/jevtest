@@ -5,4 +5,4 @@ realistic input actions, and lets Claude Code, Codex or OpenRouter-hosted models
 drive it to find user-experience problems, bugs and edge cases.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
